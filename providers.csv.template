@@ -1,0 +1,18 @@
+Name,Tier,Endpoint,Model(s)
+# Official APIs - Require API keys in .env
+OpenAI,official,https://api.openai.com/v1,https://api.openai.com/v1/models
+Anthropic,official,https://api.anthropic.com,claude-3-5-sonnet|claude-3-haiku|claude-3-opus
+Azure OpenAI,official,https://your-resource.openai.azure.com,gpt-4|gpt-35-turbo
+Google AI,official,https://generativelanguage.googleapis.com/v1,gemini-pro|gemini-pro-vision
+
+# Community APIs - Free/Low cost, some require simple auth
+Pollinations,community,https://text.pollinations.ai,https://text.pollinations.ai/models
+HuggingFace Inference,community,https://api-inference.huggingface.co,gpt2|distilbert-base-uncased|t5-base
+Replicate,community,https://api.replicate.com,https://api.replicate.com/v1/models
+Together AI,community,https://api.together.xyz,https://api.together.xyz/models
+
+# Unofficial APIs - Custom scripts, free but potentially unstable
+Bing DALL-E,unofficial,./scripts/bing-dalle-wrapper.py,bing-dalle-3
+Character AI,unofficial,./scripts/character-ai-wrapper.js,character-chat|character-assistant
+Local Ollama,unofficial,http://localhost:11434,llama2|codellama|mistral|vicuna
+Custom API,unofficial,./scripts/my-custom-api.sh,custom-model-1|custom-model-2
