@@ -1,12 +1,12 @@
-```markdown
+# Your PaL MoE
+
 <div align="center">
-  <h1>Your PaL MoE</h1>
   <p>A Parallel AI Liaison & Mixture of Experts. An enterprise-grade AI router with smart cost optimization through multi-tier provider orchestration. Compatible with Official APIs, No-Auth APIs, and Unofficial APIs.</p>
   
-  [![Release](https://img.shields.io/github/release/yourusername/intelligent-ai-gateway)](https://github.com/yourusername/intelligent-ai-gateway/releases)
-  [![License](https://img.shields.io/github/license/yourusername/intelligent-ai-gateway)](https://github.com/yourusername/intelligent-ai-gateway/blob/main/LICENSE)
-  [![Go Version](https://img.shields.io/github/go-mod/go-version/yourusername/intelligent-ai-gateway?filename=core%2Fgo.mod)](https://github.com/yourusername/intelligent-ai-gateway/blob/main/core/go.mod)
-  [![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/intelligent-ai-gateway/release.yml?branch=main)](https://github.com/yourusername/intelligent-ai-gateway/actions)
+  [![Release](https://img.shields.io/github/release/ThatsRight-ItsTJ/Your-PaL-MoE)](https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE/releases)
+  [![License](https://img.shields.io/github/license/ThatsRight-ItsTJ/Your-PaL-MoE)](https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE/blob/main/LICENSE)
+  [![Go Version](https://img.shields.io/github/go-mod/go-version/ThatsRight-ItsTJ/Your-PaL-MoE?filename=core%2Fgo.mod)](https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE/blob/main/core/go.mod)
+  [![Build Status](https://img.shields.io/github/actions/workflow/status/ThatsRight-ItsTJ/Your-PaL-MoE/release.yml?branch=main)](https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE/actions)
   
   [English](./README.md) | [简体中文](./README.zh.md)
 </div>
@@ -37,7 +37,7 @@ Built on AI Proxy with enhancements from BricksLLM, it features intelligent requ
 - **Tier 3 - Unofficial APIs**: Bing DALL-E 3, Character.AI wrappers (free, high capability)
 - **Dynamic Provider Selection**: Automatically routes through cheapest viable option first
 
-### 🔐 **Enterprise-Grade Management**
+### 🔑 **Enterprise-Grade Management**
 
 - **Granular API Key Controls**: Per-key cost limits, rate limits, and model access
 - **Tag-Based Organization**: Organize keys by environment, team, or project
@@ -89,7 +89,7 @@ Request: "Analyze this data and create a visualization"
 Total cost: ~$0.01 vs $0.15 traditional
 ```
 
-## 🏗️ Architecture
+## 🗂️ Architecture
 
 ```mermaid
 graph TB
@@ -140,7 +140,7 @@ docker run -d \
   -e ADMIN_KEY=your-admin-key \
   -e ENABLE_COST_OPTIMIZATION=true \
   -e ENABLE_UNOFFICIAL_APIS=true \
-  ghcr.io/yourusername/intelligent-ai-gateway:latest
+  ghcr.io/ThatsRight-ItsTJ/Your-PaL-MoE:latest
 ```
 
 ### Docker Compose
@@ -149,7 +149,7 @@ docker run -d \
 version: '3.8'
 services:
   gateway:
-    image: ghcr.io/yourusername/intelligent-ai-gateway:latest
+    image: ghcr.io/ThatsRight-ItsTJ/Your-PaL-MoE:latest
     ports:
       - "3000:3000"
     environment:
@@ -393,8 +393,8 @@ Access the enhanced management panel at `http://localhost:3000/dashboard` to vie
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/intelligent-ai-gateway.git
-cd intelligent-ai-gateway
+git clone https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE.git
+cd Your-PaL-MoE
 
 # Build enhanced frontend
 cd web && npm install -g pnpm && pnpm install && pnpm run build && cp -r dist ../core/public/dist/ && cd ..
@@ -500,4 +500,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
   <p><strong>Transform your AI costs from expense to competitive advantage</strong></p>
   <p>⭐ Star us on GitHub | 🐛 Report Issues | 💡 Request Features</p>
 </div>
-```
