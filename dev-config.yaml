@@ -1,0 +1,44 @@
+# Development configuration for Intelligent AI Gateway
+database:
+  dsn: "sqlite://./dev.db"
+  
+redis:
+  url: "redis://localhost:6379"
+  
+features:
+  cost_optimization: true
+  unofficial_apis: true
+  task_decomposition: true
+  parallel_execution: true
+  
+logging:
+  level: debug
+  detailed_requests: true
+  
+server:
+  listen: ":3000"
+  
+providers:
+  csv_path: "./providers.csv"
+  health_check_interval: "30s"
+  
+cost_optimization:
+  aggressive: true
+  max_cost_per_request: 1.00
+  fallback_to_paid: true
+  
+unofficial_apis:
+  timeout: "30s"
+  session_pool_size: 10
+  session_rotation_interval: "1h"
+  
+task_master:
+  parallel_execution: true
+  max_parallel_tasks: 5
+  task_timeout: "60s"
+  result_aggregation_timeout: "120s"
+  
+monitoring:
+  circuit_breaker_failure_threshold: 5
+  circuit_breaker_timeout: "10m"
+  provider_retry_attempts: 3

@@ -1,48 +1,41 @@
-FROM node:22-alpine AS frontend-builder
+# Build stage
+FROM golang:1.21-alpine AS builder
 
-WORKDIR /aiproxy/web
+WORKDIR /app
 
-COPY ./web/ ./
+# Install dependencies
+RUN apk add --no-cache git make
 
-RUN npm install -g pnpm
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN pnpm install && pnpm run build
+# Copy source code
+COPY . .
 
-FROM golang:1.25-alpine AS builder
+# Build the application
+RUN go build -o intelligent-ai-gateway ./cmd/gateway
 
-RUN apk add --no-cache curl
-
-WORKDIR /aiproxy/core
-
-COPY ./ /aiproxy
-
-COPY --from=frontend-builder /aiproxy/web/dist/ /aiproxy/core/public/dist/
-
-RUN sh scripts/tiktoken.sh
-
-RUN go install github.com/swaggo/swag/cmd/swag@latest
-
-RUN sh scripts/swag.sh
-
-RUN go build -trimpath -ldflags "-s -w" -o aiproxy
-
+# Runtime stage
 FROM alpine:latest
 
-RUN mkdir -p /aiproxy
+RUN apk --no-cache add ca-certificates python3 nodejs npm bash
 
-WORKDIR /aiproxy
+WORKDIR /app
 
-VOLUME /aiproxy
+# Copy binary from builder
+COPY --from=builder /app/intelligent-ai-gateway .
 
-RUN apk add --no-cache ca-certificates tzdata ffmpeg curl && \
-    rm -rf /var/cache/apk/*
+# Copy configuration files
+COPY providers.csv.template ./
+COPY web/admin ./web/admin
 
-COPY --from=builder /aiproxy/core/aiproxy /usr/local/bin/aiproxy
+# Create directories
+RUN mkdir -p scripts generated/providers logs
 
-ENV PUID=0 PGID=0 UMASK=022
-
-ENV FFMPEG_ENABLED=true
+# Install Python dependencies for scripts
+RUN pip3 install requests
 
 EXPOSE 3000
 
-ENTRYPOINT ["aiproxy"]
+CMD ["./intelligent-ai-gateway"]

@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  gateway:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - ADMIN_KEY=${ADMIN_KEY}
+      - SQL_DSN=postgres://gateway:password@postgres:5432/gateway
+      - REDIS=redis://redis:6379
+      - PROVIDERS_CSV=/app/providers.csv
+      - ENABLE_COST_OPTIMIZATION=true
+      - ENABLE_UNOFFICIAL_APIS=true
+      - POLLINATIONS_ENABLED=true
+    volumes:
+      - ./providers.csv:/app/providers.csv
+      - ./scripts:/app/scripts
+      - ./generated:/app/generated
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: gateway
+      POSTGRES_USER: gateway
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./certs:/etc/nginx/certs
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
