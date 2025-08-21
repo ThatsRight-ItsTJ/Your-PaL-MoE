@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligent AI Gateway - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100">
+    <div x-data="adminDashboard()" x-init="init()" class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <h1 class="text-xl font-semibold">Intelligent AI Gateway Admin</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button @click="activeTab = 'overview'" 
+                                :class="{'text-blue-600': activeTab === 'overview'}"
+                                class="px-3 py-2 rounded-md text-sm font-medium">
+                            Overview
+                        </button>
+                        <button @click="activeTab = 'providers'" 
+                                :class="{'text-blue-600': activeTab === 'providers'}"
+                                class="px-3 py-2 rounded-md text-sm font-medium">
+                            Providers
+                        </button>
+                        <button @click="activeTab = 'csv'" 
+                                :class="{'text-blue-600': activeTab === 'csv'}"
+                                class="px-3 py-2 rounded-md text-sm font-medium">
+                            CSV Config
+                        </button>
+                        <button @click="activeTab = 'analytics'" 
+                                :class="{'text-blue-600': activeTab === 'analytics'}"
+                                class="px-3 py-2 rounded-md text-sm font-medium">
+                            Analytics
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <!-- Overview Tab -->
+            <div x-show="activeTab === 'overview'" class="px-4 py-6 sm:px-0">
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                    <!-- Total Cost Card -->
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Total Cost (30d)
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                $<span x-text="overview.total_cost?.toFixed(2) || '0.00'"></span>
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Savings Card -->
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Savings vs Official
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-green-600">
+                                $<span x-text="overview.savings_vs_official?.toFixed(2) || '0.00'"></span>
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Active Providers Card -->
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Active Providers
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                <span x-text="overview.healthy_providers || 0"></span>/<span x-text="overview.provider_count || 0"></span>
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Success Rate Card -->
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Success Rate
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                99.9%
+                            </dd>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cost by Tier Chart -->
+                <div class="mt-8 bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Cost Distribution by Tier</h3>
+                    <canvas id="costByTierChart"></canvas>
+                </div>
+
+                <!-- Optimization Opportunities -->
+                <div class="mt-8 bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Optimization Opportunities</h3>
+                    <div class="space-y-4">
+                        <template x-for="opportunity in overview.optimization_opportunities" :key="opportunity.description">
+                            <div class="border-l-4 border-blue-400 bg-blue-50 p-4">
+                                <div class="flex">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-blue-900" x-text="opportunity.description"></p>
+                                        <p class="text-sm text-blue-700 mt-1" x-text="opportunity.implementation"></p>
+                                        <p class="text-sm text-blue-600 mt-1">
+                                            Potential savings: $<span x-text="opportunity.potential_savings?.toFixed(2)"></span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Providers Tab -->
+            <div x-show="activeTab === 'providers'" class="px-4 py-6 sm:px-0">
+                <div class="bg-white shadow overflow-hidden sm:rounded-md">
+                    <div class="px-4 py-5 sm:px-6 flex justify-between">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">
+                            Configured Providers
+                        </h3>
+                        <button @click="reloadProviders()" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                            Reload All
+                        </button>
+                    </div>
+                    <ul class="divide-y divide-gray-200">
+                        <template x-for="provider in providers" :key="provider.name">
+                            <li class="px-4 py-4 sm:px-6">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <span :class="{
+                                                'bg-green-100 text-green-800': provider.health?.status?.status === 'healthy',
+                                                'bg-yellow-100 text-yellow-800': provider.health?.status?.status === 'degraded',
+                                                'bg-red-100 text-red-800': provider.health?.status?.status === 'down',
+                                                'bg-gray-100 text-gray-800': !provider.health
+                                            }" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
+                                                <span x-text="provider.health?.status?.status || 'unknown'"></span>
+                                            </span>
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="text-sm font-medium text-gray-900" x-text="provider.name"></div>
+                                            <div class="text-sm text-gray-500">
+                                                <span x-text="provider.tier"></span> • 
+                                                <span x-text="provider.endpoint"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button @click="testProvider(provider.name)" class="text-blue-600 hover:text-blue-900 text-sm">
+                                            Test
+                                        </button>
+                                        <button @click="discoverModels(provider.name)" class="text-green-600 hover:text-green-900 text-sm">
+                                            Discover Models
+                                        </button>
+                                    </div>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- CSV Config Tab -->
+            <div x-show="activeTab === 'csv'" class="px-4 py-6 sm:px-0">
+                <div class="bg-white shadow rounded-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">CSV Configuration</h3>
+                        <div class="space-x-2">
+                            <button @click="downloadTemplate()" class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                Download Template
+                            </button>
+                            <button @click="downloadCurrentCSV()" class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                Download Current
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CSV Editor -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Edit CSV Configuration
+                        </label>
+                        <textarea x-model="csvContent" rows="15" class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md font-mono"></textarea>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-between">
+                        <div class="space-x-2">
+                            <button @click="validateCSV()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700">
+                                Validate
+                            </button>
+                            <button @click="saveCSV()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+                                Save & Reload
+                            </button>
+                        </div>
+                        <div>
+                            <input type="file" id="csvFileInput" @change="uploadCSV($event)" class="hidden">
+                            <label for="csvFileInput" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
+                                Upload CSV
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Validation Results -->
+                    <div x-show="validationResult" class="mt-4">
+                        <div :class="validationResult?.valid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'" class="border rounded-md p-4">
+                            <h4 class="text-sm font-medium" :class="validationResult?.valid ? 'text-green-900' : 'text-red-900'">
+                                Validation <span x-text="validationResult?.valid ? 'Passed' : 'Failed'"></span>
+                            </h4>
+                            <ul class="mt-2 text-sm" :class="validationResult?.valid ? 'text-green-700' : 'text-red-700'">
+                                <template x-for="error in validationResult?.errors" :key="error">
+                                    <li x-text="error"></li>
+                                </template>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div x-show="activeTab === 'analytics'" class="px-4 py-6 sm:px-0">
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <!-- Provider Performance -->
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Provider Performance</h3>
+                        <canvas id="providerPerformanceChart"></canvas>
+                    </div>
+
+                    <!-- Request Volume -->
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Request Volume (7 days)</h3>
+                        <canvas id="requestVolumeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function adminDashboard() {
+            return {
+                activeTab: 'overview',
+                overview: {},
+                providers: [],
+                csvContent: '',
+                validationResult: null,
+                charts: {},
+
+                async init() {
+                    await this.loadOverview();
+                    await this.loadProviders();
+                    await this.loadCSV();
+                    this.initCharts();
+                },
+
+                async loadOverview() {
+                    try {
+                        const response = await fetch('/admin/analytics/overview', {
+                            headers: { 'Authorization': `Bearer ${this.getAdminKey()}` }
+                        });
+                        this.overview = await response.json();
+                        this.updateCharts();
+                    } catch (error) {
+                        console.error('Failed to load overview:', error);
+                    }
+                },
+
+                async loadProviders() {
+                    try {
+                        const response = await fetch('/admin/providers', {
+                            headers: { 'Authorization': `Bearer ${this.getAdminKey()}` }
+                        });
+                        this.providers = await response.json();
+                    } catch (error) {
+                        console.error('Failed to load providers:', error);
+                    }
+                },
+
+                async loadCSV() {
+                    try {
+                        const response = await fetch('/admin/csv', {
+                            headers: { 'Authorization': `Bearer ${this.getAdminKey()}` }
+                        });
+                        this.csvContent = await response.text();
+                    } catch (error) {
+                        console.error('Failed to load CSV:', error);
+                    }
+                },
+
+                async reloadProviders() {
+                    try {
+                        const response = await fetch('/admin/csv/reload', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${this.getAdminKey()}` }
+                        });
+                        const result = await response.json();
+                        alert(result.message);
+                        await this.loadProviders();
+                    } catch (error) {
+                        console.error('Failed to reload providers:', error);
+                        alert('Failed to reload providers');
+                    }
+                },
+
+                async testProvider(name) {
+                    try {
+                        const response = await fetch(`/admin/providers/${name}/test`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${this.getAdminKey()}` }
+                        });
+                        const result = await response.json();
+                        alert(result.message);
+                    } catch (error) {
+                        console.error('Failed to test provider:', error);
+                        alert('Provider test failed');
+                    }
+                },
+
+                async validateCSV() {
+                    try {
+                        const response = await fetch('/admin/csv/validate', {
+                            method: 'POST',
+                            headers: { 
+                                'Authorization': `Bearer ${this.getAdminKey()}`,
+                                'Content-Type': 'text/csv'
+                            },
+                            body: this.csvContent
+                        });
+                        this.validationResult = await response.json();
+                    } catch (error) {
+                        console.error('Failed to validate CSV:', error);
+                    }
+                },
+
+                async saveCSV() {
+                    try {
+                        // First validate
+                        await this.validateCSV();
+                        if (!this.validationResult?.valid) {
+                            alert('CSV validation failed. Please fix errors before saving.');
+                            return;
+                        }
+
+                        const formData = new FormData();
+                        const blob = new Blob([this.csvContent], { type: 'text/csv' });
+                        formData.append('csv', blob, 'providers.csv');
+
+                        const response = await fetch('/admin/csv', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${this.getAdminKey()}` },
+                            body: formData
+                        });
+                        const result = await response.json();
+                        alert(result.message);
+                        await this.loadProviders();
+                    } catch (error) {
+                        console.error('Failed to save CSV:', error);
+                        alert('Failed to save CSV');
+                    }
+                },
+
+                async uploadCSV(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    const text = await file.text();
+                    this.csvContent = text;
+                },
+
+                async discoverModels(providerName) {
+                    try {
+                        const response = await fetch(`/admin/providers/${providerName}/models`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${this.getAdminKey()}` }
+                        });
+                        const result = await response.json();
+                        alert(`Models discovered for ${providerName}: ${result.models.join(', ')}`);
+                    } catch (error) {
+                        console.error('Failed to discover models:', error);
+                        alert('Failed to discover models');
+                    }
+                },
+
+                initCharts() {
+                    // Cost by Tier Chart
+                    const costCtx = document.getElementById('costByTierChart')?.getContext('2d');
+                    if (costCtx) {
+                        this.charts.costByTier = new Chart(costCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['Official', 'Community', 'Unofficial'],
+                                datasets: [{
+                                    data: [0, 0, 0],
+                                    backgroundColor: ['#EF4444', '#F59E0B', '#10B981']
+                                }]
+                            }
+                        });
+                    }
+                },
+
+                updateCharts() {
+                    if (this.charts.costByTier && this.overview.cost_by_tier) {
+                        this.charts.costByTier.data.datasets[0].data = [
+                            this.overview.cost_by_tier.official || 0,
+                            this.overview.cost_by_tier.community || 0,
+                            this.overview.cost_by_tier.unofficial || 0
+                        ];
+                        this.charts.costByTier.update();
+                    }
+                },
+
+                getAdminKey() {
+                    return localStorage.getItem('admin_key') || prompt('Enter admin key:');
+                },
+
+                downloadTemplate() {
+                    window.location.href = '/admin/csv/template?key=' + this.getAdminKey();
+                },
+
+                downloadCurrentCSV() {
+                    const blob = new Blob([this.csvContent], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'providers.csv';
+                    a.click();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
