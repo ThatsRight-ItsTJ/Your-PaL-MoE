@@ -6,15 +6,20 @@ WORKDIR /app
 # Install dependencies
 RUN apk add --no-cache git make
 
-# Copy go mod files
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy go workspace and mod files
+COPY go.work go.work.sum ./
+COPY core/go.mod core/go.sum ./core/
+COPY mcp-servers/go.mod mcp-servers/go.sum ./mcp-servers/ 
+COPY openapi-mcp/go.mod openapi-mcp/go.sum ./openapi-mcp/
+
+# Download dependencies
+RUN cd core && go mod download
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN go build -o intelligent-ai-gateway ./cmd/gateway
+RUN cd core && go build -o ../intelligent-ai-gateway .
 
 # Runtime stage
 FROM alpine:latest
