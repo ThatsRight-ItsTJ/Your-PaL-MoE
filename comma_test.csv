@@ -1,0 +1,2 @@
+ID,Name,Tier,Endpoint,APIKey,Models,CostPerToken,MaxTokens,Capabilities,AdditionalInfo
+test_comma,Comma Test,community,https://api.example.com,xxx,model-a,model-b,model-c,0.001,2048,chat,comma_delimited:true

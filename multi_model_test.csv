@@ -1,0 +1,7 @@
+ID,Name,Tier,Endpoint,APIKey,Models,CostPerToken,MaxTokens,Capabilities,AdditionalInfo
+openai,OpenAI,official,https://api.openai.com/v1,sk-xxx,gpt-3.5-turbo|gpt-4|gpt-4-turbo,0.00003,8192,chat;code,rate_limit:10000/min,tier:premium
+anthropic,Anthropic,official,https://api.anthropic.com/v1,xxx,claude-3-5-sonnet|claude-3-haiku|claude-3-opus,0.000015,4096,chat;analysis,rate_limit:5000/min,high_quality:true
+pollinations,Pollinations,community,https://text.pollinations.ai,,https://text.pollinations.ai/models,0.000001,2048,chat;creative,no_auth:true,free_tier:true
+together_ai,Together AI,community,https://api.together.xyz/v1,xxx,llama-2-70b|llama-2-13b|mistral-7b,0.0000009,4096,chat;code,rate_limit:1000/min,open_source:true
+local_ollama,Local Ollama,unofficial,http://localhost:11434,none,http://localhost:11434/api/tags,0,4096,chat;code,local:true,privacy:high
+single_model,Single Model Provider,community,https://api.example.com,xxx,simple-model,0.001,2048,chat,basic_provider:true

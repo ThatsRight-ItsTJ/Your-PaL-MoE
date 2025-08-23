@@ -22,20 +22,15 @@ const (
 	UnofficialTier ProviderTier = "unofficial"
 )
 
-// Provider represents an AI provider with its capabilities
+// Provider represents an AI provider with simplified 5-column structure
 type Provider struct {
-	ID           string                 `json:"id"`
-	Name         string                 `json:"name"`
-	Tier         ProviderTier           `json:"tier"`
-	Endpoint     string                 `json:"endpoint"`
-	APIKey       string                 `json:"api_key"`
-	Models       []string               `json:"models"`        // Support multiple models
-	ModelsSource string                 `json:"models_source"` // Either "list" or API endpoint URL
-	CostPerToken float64                `json:"cost_per_token"`
-	MaxTokens    int                    `json:"max_tokens"`
-	Capabilities []string               `json:"capabilities"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	Metrics      ProviderMetrics        `json:"metrics"`
+	Name     string       `json:"name"`      // Column 1: Name
+	Tier     ProviderTier `json:"tier"`      // Column 2: Tier  
+	BaseURL  string       `json:"base_url"`  // Column 3: Base_URL
+	APIKey   string       `json:"api_key"`   // Column 4: APIKey
+	Models   string       `json:"models"`    // Column 5: Model(s) - can be endpoint or list
+	Other    string       `json:"other"`     // Column 6: Other info
+	Metrics  ProviderMetrics `json:"metrics"`
 }
 
 // ProviderMetrics tracks performance metrics for a provider
@@ -157,94 +152,19 @@ func (a *AdaptiveProviderSelector) loadProviders() error {
 	return nil
 }
 
-// parseProviderRecord parses a CSV record into a Provider struct
+// parseProviderRecord parses a 5-column CSV record into a Provider struct
 func (a *AdaptiveProviderSelector) parseProviderRecord(record []string) (*Provider, error) {
-	if len(record) < 8 {
-		return nil, fmt.Errorf("insufficient columns in provider record")
-	}
-	
-	costPerToken, err := strconv.ParseFloat(record[6], 64)
-	if err != nil {
-		costPerToken = 0.0
-	}
-	
-	maxTokens, err := strconv.Atoi(record[7])
-	if err != nil {
-		maxTokens = 4096
-	}
-	
-	// Parse models (column 5) - can be either model list or models endpoint URL
-	var models []string
-	var modelsSource string
-	
-	modelField := strings.TrimSpace(record[5])
-	if modelField != "" {
-		// Check if it's a URL (models endpoint)
-		if strings.HasPrefix(modelField, "http://") || strings.HasPrefix(modelField, "https://") {
-			modelsSource = modelField
-			// Models will be fetched from the endpoint later
-			models = []string{} // Empty initially, to be populated by API call
-		} else {
-			// It's a delimited list of models
-			modelsSource = "list"
-			// Split by | or , delimiter
-			if strings.Contains(modelField, "|") {
-				models = strings.Split(modelField, "|")
-			} else if strings.Contains(modelField, ",") {
-				models = strings.Split(modelField, ",")
-			} else if strings.Contains(modelField, ";") {
-				models = strings.Split(modelField, ";")
-			} else {
-				// Single model
-				models = []string{modelField}
-			}
-			
-			// Clean up model names
-			for i, model := range models {
-				models[i] = strings.TrimSpace(model)
-			}
-		}
-	}
-	
-	// Parse capabilities (column 8)
-	capabilities := []string{}
-	if len(record) > 8 && record[8] != "" {
-		capabilities = strings.Split(record[8], ";")
-		for i, cap := range capabilities {
-			capabilities[i] = strings.TrimSpace(cap)
-		}
-	}
-	
-	// Parse additional info (column 9) - new fifth column
-	metadata := make(map[string]interface{})
-	if len(record) > 9 && record[9] != "" {
-		metadata["additional_info"] = record[9]
-		// Parse additional info for structured data like rate limits, costs, etc.
-		parts := strings.Split(record[9], ",")
-		for _, part := range parts {
-			if strings.Contains(part, ":") {
-				kv := strings.SplitN(part, ":", 2)
-				if len(kv) == 2 {
-					key := strings.TrimSpace(kv[0])
-					value := strings.TrimSpace(kv[1])
-					metadata[key] = value
-				}
-			}
-		}
+	if len(record) < 6 {
+		return nil, fmt.Errorf("insufficient columns: expected 6 columns (Name,Tier,Base_URL,APIKey,Models,Other), got %d", len(record))
 	}
 	
 	provider := &Provider{
-		ID:           record[0],
-		Name:         record[1],
-		Tier:         ProviderTier(strings.ToLower(record[2])),
-		Endpoint:     record[3],
-		APIKey:       record[4],
-		Models:       models,
-		ModelsSource: modelsSource,
-		CostPerToken: costPerToken,
-		MaxTokens:    maxTokens,
-		Capabilities: capabilities,
-		Metadata:     metadata,
+		Name:    strings.TrimSpace(record[0]), // Column 1: Name
+		Tier:    ProviderTier(strings.ToLower(strings.TrimSpace(record[1]))), // Column 2: Tier
+		BaseURL: strings.TrimSpace(record[2]), // Column 3: Base_URL
+		APIKey:  strings.TrimSpace(record[3]), // Column 4: APIKey  
+		Models:  strings.TrimSpace(record[4]), // Column 5: Model(s)
+		Other:   strings.TrimSpace(record[5]), // Column 6: Other
 		Metrics: ProviderMetrics{
 			SuccessRate:      0.9, // Default values
 			AverageLatency:   1000.0,
@@ -253,7 +173,7 @@ func (a *AdaptiveProviderSelector) parseProviderRecord(record []string) (*Provid
 			LastUpdated:      time.Now(),
 			RequestCount:     0,
 			ErrorCount:       0,
-			AverageCost:      costPerToken,
+			AverageCost:      0.001, // Default cost
 			ReliabilityScore: 0.8,
 		},
 	}
