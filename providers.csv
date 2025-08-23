@@ -1,11 +1,2 @@
-Name,Tier,Endpoint,Model(s)
-# Official APIs - Require API keys in .env
-OpenAI,official,https://api.openai.com/v1,https://api.openai.com/v1/models
-Anthropic,official,https://api.anthropic.com,claude-3-5-sonnet|claude-3-haiku|claude-3-opus
-
-# Community APIs - Free/Low cost, some require simple auth
-Pollinations,community,https://text.pollinations.ai,https://text.pollinations.ai/models
-HuggingFace Inference,community,https://api-inference.huggingface.co,gpt2|distilbert-base-uncased|t5-base
-
-# Unofficial APIs - Custom scripts, free but potentially unstable
-Local Ollama,unofficial,http://localhost:11434,llama2|codellama|mistral|vicuna
+ID,Name,Tier,Endpoint,APIKey,Model,CostPerToken,MaxTokens,Capabilities,AdditionalInfo
+test_provider,Test Provider,community,https://example.com/api,,test-model,0.001,2048,chat,rate_limit:100/min
