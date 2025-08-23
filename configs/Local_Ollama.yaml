@@ -22,17 +22,18 @@ rate_limiting:
   
 capabilities:
   - chat
+
+
   - local
 
 metadata:
   description: "Local deployment with full privacy"
   auto_generated: true
   csv_source: "providers.csv"
-  generated_at: "2025-08-22 20:45:00"
+  generated_at: "Fri Aug 22 20:47:08 PDT 2025"
   
 # Tier-specific configurations
 unofficial_features:
   local_deployment: true
   privacy_focused: true
   no_external_deps: true
-  offline_capable: true

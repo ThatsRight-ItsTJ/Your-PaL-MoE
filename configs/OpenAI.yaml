@@ -11,28 +11,26 @@ provider:
 models:
   source: "gpt-3.5-turbo|gpt-4|gpt-4-turbo"
   dynamic_loading: false
-  available_models:
-    - "gpt-3.5-turbo"
-    - "gpt-4"
-    - "gpt-4-turbo"
   
 configuration:
   timeout: "30s"
   max_retries: 3
   
 rate_limiting:
-  enabled: false
+  enabled: true
   requests_per_minute: 100
   
 capabilities:
   - chat
+
   - premium
+
 
 metadata:
   description: "Premium service with high rate limits"
   auto_generated: true
   csv_source: "providers.csv"
-  generated_at: "2025-08-22 20:45:00"
+  generated_at: "Fri Aug 22 20:47:08 PDT 2025"
   
 # Tier-specific configurations
 premium_features:
