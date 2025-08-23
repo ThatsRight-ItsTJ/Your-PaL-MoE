@@ -44,6 +44,8 @@ func main() {
 	router.HandleFunc("/api/v1/process", server.processHandler).Methods("POST")
 	router.HandleFunc("/api/v1/requests/{id}", server.getRequestHandler).Methods("GET")
 	router.HandleFunc("/api/v1/providers", server.getProvidersHandler).Methods("GET")
+	router.HandleFunc("/api/v1/providers/{id}/yaml", server.generateProviderYAMLHandler).Methods("GET")
+	router.HandleFunc("/api/v1/providers/yaml/generate-all", server.generateAllYAMLsHandler).Methods("POST")
 	router.HandleFunc("/api/v1/metrics", server.getMetricsHandler).Methods("GET")
 
 	// Start server
@@ -149,4 +151,34 @@ func (h *HTTPServer) getMetricsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(metrics)
+}
+func (h *HTTPServer) generateProviderYAMLHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	providerID := vars["id"]
+
+	yaml, err := h.system.GenerateProviderYAML(r.Context(), providerID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate YAML: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-yaml")
+	w.Write([]byte(yaml))
+}
+
+func (h *HTTPServer) generateAllYAMLsHandler(w http.ResponseWriter, r *http.Request) {
+	yamls, err := h.system.GenerateAllProviderYAMLs(r.Context())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate YAMLs: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"generated_count": len(yamls),
+		"providers":       yamls,
+		"timestamp":       time.Now().Unix(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

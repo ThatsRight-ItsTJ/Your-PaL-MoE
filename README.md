@@ -1,502 +1,275 @@
-# Your PaL MoE
+# Your PaL MoE (Mixture of Experts)
 
-<div align="center">
-  <p>A Parallel AI Liaison & Mixture of Experts. An enterprise-grade AI router with smart cost optimization through multi-tier provider orchestration. Compatible with Official APIs, No-Auth APIs, and Unofficial APIs.</p>
-  
-  [![Release](https://img.shields.io/github/release/ThatsRight-ItsTJ/Your-PaL-MoE)](https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE/releases)
-  [![License](https://img.shields.io/github/license/ThatsRight-ItsTJ/Your-PaL-MoE)](https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE/blob/main/LICENSE)
-  [![Go Version](https://img.shields.io/github/go-mod/go-version/ThatsRight-ItsTJ/Your-PaL-MoE?filename=core%2Fgo.mod)](https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE/blob/main/core/go.mod)
-  [![Build Status](https://img.shields.io/github/actions/workflow/status/ThatsRight-ItsTJ/Your-PaL-MoE/release.yml?branch=main)](https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE/actions)
-  
-  [English](./README.md) | [简体中文](./README.zh.md)
-</div>
+A cost-optimized AI router that automatically selects the best provider for each task using a simple CSV-based configuration system with enhanced intelligence features.
 
----
+## Features
 
-## 🚀 Overview
+### 🎯 **Original Core Features**
+- **Multi-tier Provider System**: Official → Community → Unofficial fallback routing
+- **Cost Optimization**: Achieve 70-90% cost savings through intelligent provider selection  
+- **Go Concurrency**: True parallel processing with goroutines and channels
+- **Simple CSV Configuration**: Easy provider management via `providers.csv`
+- **RESTful API**: Clean HTTP endpoints for integration
 
-Intelligent AI Gateway is a next-generation AI proxy that automatically routes requests through official APIs (OpenAI, Anthropic), community providers (HuggingFace Spaces), and unofficial APIs (Bing DALL-E 3, scraped interfaces) to deliver **premium AI capabilities at 70-90% cost savings**.
+### 🧠 **Enhanced Intelligence Features**
+- **Task Complexity Analysis**: Multi-dimensional scoring (reasoning, knowledge, computation, coordination)
+- **Self-Supervised Prompt Optimization (SPO)**: Automatic prompt enhancement with caching
+- **Adaptive Provider Selection**: ML-inspired multi-criteria scoring with real-time learning
+- **Performance Tracking**: Continuous metrics collection and provider health monitoring
+- **AI-Powered YAML Generation**: Automated provider configuration using Pollinations API
 
-Built on AI Proxy with enhancements from BricksLLM, it features intelligent request parsing, parallel execution, and smart cost optimization through a three-tier provider ecosystem.
+## Quick Start
 
-> **Unlike simple proxies that just forward requests, this system intelligently decomposes tasks and routes them to the most cost-effective providers while maintaining premium quality.**
-
-## ✨ Key Features
-
-### 🧠 **Intelligent Request Orchestration**
-
-- **Smart Task Decomposition**: Automatically parses complex requests into optimized subtasks
-- **Parallel Execution**: Execute multiple AI operations simultaneously for faster responses
-- **Cost-Aware Routing**: Routes each task to the most cost-effective suitable provider
-- **Automatic Failover**: Seamless fallback from free to paid providers when needed
-
-### 💰 **Multi-Tier Cost Optimization**
-
-- **Tier 1 - Official APIs**: OpenAI, Anthropic, Azure (premium, reliable, expensive)
-- **Tier 2 - Community APIs**: HuggingFace Spaces, Replicate (free/low-cost, good quality)
-- **Tier 3 - Unofficial APIs**: Bing DALL-E 3, Character.AI wrappers (free, high capability)
-- **Dynamic Provider Selection**: Automatically routes through cheapest viable option first
-
-### 🔑 **Enterprise-Grade Management**
-
-- **Granular API Key Controls**: Per-key cost limits, rate limits, and model access
-- **Tag-Based Organization**: Organize keys by environment, team, or project
-- **Real-Time Cost Tracking**: Monitor spending across all provider tiers
-- **Comprehensive Audit Trails**: Complete request/response logging and analytics
-
-### 🌐 **Universal Provider Support**
-
-- **Official APIs**: Native support for OpenAI, Anthropic, Azure, Google
-- **Community Providers**: HuggingFace Spaces, Replicate, Together AI
-- **Unofficial APIs**: Bing Image Creator, scraped interfaces with session management
-- **OpenAI Compatibility**: Drop-in replacement for existing OpenAI integrations
-
-### 📊 **Advanced Monitoring & Analytics**
-
-- **Provider Health Monitoring**: Real-time status tracking with circuit breakers
-- **Cost Analytics**: Detailed breakdown by provider tier and optimization opportunities
-- **Performance Metrics**: Response times, success rates, and quality tracking
-- **Usage Insights**: Request patterns, popular models, and cost trends
-
-### 🔌 **Enhanced Plugin System**
-
-- **Task Master Plugin**: Intelligent request decomposition and parallel execution
-- **Cost Optimizer Plugin**: Dynamic provider selection based on cost and performance
-- **Provider Health Plugin**: Automatic health checking and circuit breaking
-- **Session Manager Plugin**: Cookie/token management for unofficial APIs
-- **All Original Plugins**: Cache, Web Search, Think Split, and Stream Fake
-
-## 💡 Use Cases & Cost Savings
-
-### **Image Generation Example**
-```
-Traditional: $0.040 per image via OpenAI DALL-E 3
-Our Gateway: $0.004 per image (90% savings via Bing DALL-E 3 fallback)
-```
-
-### **Chat Completion Example**
-```
-Traditional: $0.03 per 1K tokens via OpenAI GPT-4
-Our Gateway: $0.003 per 1K tokens (90% savings via unofficial Claude access)
-```
-
-### **Multi-Modal Request Example**
-```
-Request: "Analyze this data and create a visualization"
-- Data analysis → Free Claude wrapper
-- Chart generation → HuggingFace Python API
-- Image rendering → Bing Image Creator
-Total cost: ~$0.01 vs $0.15 traditional
-```
-
-## 🗂️ Architecture
-
-```mermaid
-graph TB
-    Client[Client Applications] --> Gateway[Intelligent AI Gateway]
-    Gateway --> Auth[Enhanced Authentication & Key Management]
-    Gateway --> TaskMaster[Task Master - Request Decomposition]
-    Gateway --> Monitor[Advanced Monitoring & Cost Analytics]
-    Gateway --> Plugins[Enhanced Plugin System]
-    
-    TaskMaster --> Router[Intelligent Multi-Tier Router]
-    
-    Router --> Tier1[Tier 1: Official APIs]
-    Router --> Tier2[Tier 2: Community APIs]
-    Router --> Tier3[Tier 3: Unofficial APIs]
-    
-    Tier1 --> OpenAI[OpenAI]
-    Tier1 --> Anthropic[Anthropic]
-    Tier1 --> Azure[Azure OpenAI]
-    
-    Tier2 --> HF[HuggingFace Spaces]
-    Tier2 --> Replicate[Replicate]
-    Tier2 --> Together[Together AI]
-    
-    Tier3 --> BingAI[Bing DALL-E 3]
-    Tier3 --> CharacterAI[Character.AI]
-    Tier3 --> Scraped[Other Scraped APIs]
-    
-    Plugins --> CostPlugin[Cost Optimizer]
-    Plugins --> HealthPlugin[Provider Health Monitor]
-    Plugins --> SessionPlugin[Session Manager]
-    Plugins --> CachePlugin[Smart Cache]
-    
-    Monitor --> CostAnalytics[Cost Analytics]
-    Monitor --> HealthDashboard[Provider Health Dashboard]
-    Monitor --> UsageInsights[Usage Insights]
-```
-
-## 🚀 Quick Start
-
-### Docker (Recommended)
-
+### Installation
 ```bash
-# Quick start with intelligent routing
-docker run -d \
-  --name intelligent-ai-gateway \
-  -p 3000:3000 \
-  -v $(pwd)/gateway-data:/gateway-data \
-  -e ADMIN_KEY=your-admin-key \
-  -e ENABLE_COST_OPTIMIZATION=true \
-  -e ENABLE_UNOFFICIAL_APIS=true \
-  ghcr.io/ThatsRight-ItsTJ/Your-PaL-MoE:latest
-```
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  gateway:
-    image: ghcr.io/ThatsRight-ItsTJ/Your-PaL-MoE:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - ADMIN_KEY=your-admin-key
-      - SQL_DSN=postgres://user:pass@postgres:5432/gateway
-      - REDIS=redis://redis:6379
-      - ENABLE_COST_OPTIMIZATION=true
-      - ENABLE_UNOFFICIAL_APIS=true
-      - UNOFFICIAL_BING_COOKIE=your-bing-cookie
-    volumes:
-      - ./gateway-data:/gateway-data
-    depends_on:
-      - postgres
-      - redis
-
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: gateway
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-
-volumes:
-  postgres_data:
-  redis_data:
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-#### **Core Settings**
-
-```bash
-LISTEN=:3000                          # Server listen address
-ADMIN_KEY=your-admin-key              # Admin API key
-ENABLE_COST_OPTIMIZATION=true         # Enable smart cost optimization
-ENABLE_UNOFFICIAL_APIS=true           # Enable unofficial API integration
-```
-
-#### **Database Configuration**
-
-```bash
-SQL_DSN=postgres://user:pass@host:5432/gateway    # Primary database
-LOG_SQL_DSN=postgres://user:pass@host:5432/logs   # Log database (optional)
-REDIS=redis://localhost:6379                      # Redis for caching and sessions
-```
-
-#### **Cost Optimization Settings**
-
-```bash
-COST_OPTIMIZATION_AGGRESSIVE=true     # Prefer free providers even with quality trade-offs
-MAX_COST_PER_REQUEST=1.00             # Maximum cost threshold per request
-FALLBACK_TO_PAID_ON_FAILURE=true      # Auto-fallback to paid APIs when free fails
-UNOFFICIAL_API_TIMEOUT=30s             # Timeout for unofficial API attempts
-```
-
-#### **Unofficial API Configuration**
-
-```bash
-# Bing DALL-E 3 Integration
-UNOFFICIAL_BING_COOKIE=your-_U-cookie
-BING_COOKIE_ROTATION_ENABLED=true
-
-# Session Management
-SESSION_POOL_SIZE=10
-SESSION_ROTATION_INTERVAL=1h
-HEALTH_CHECK_INTERVAL=5m
-```
-
-### Advanced Configuration
-
-<details>
-<summary>Click to expand advanced configuration options</summary>
-
-#### **Enhanced Key Management**
-
-```bash
-KEY_COST_LIMITS_ENABLED=true          # Enable per-key cost limits
-KEY_TAG_BASED_ROUTING=true            # Route based on key tags
-KEY_AUTO_ROTATION_ENABLED=true        # Automatic key rotation
-```
-
-#### **Task Master Settings**
-
-```bash
-PARALLEL_EXECUTION_ENABLED=true       # Enable parallel task execution
-MAX_PARALLEL_TASKS=5                  # Maximum concurrent tasks per request
-TASK_TIMEOUT=60s                      # Individual task timeout
-RESULT_AGGREGATION_TIMEOUT=120s       # Total response timeout
-```
-
-#### **Provider Health Monitoring**
-
-```bash
-HEALTH_CHECK_INTERVAL=5m              # How often to check provider health
-CIRCUIT_BREAKER_FAILURE_THRESHOLD=5   # Failures before circuit breaks
-CIRCUIT_BREAKER_TIMEOUT=10m           # Circuit breaker timeout duration
-PROVIDER_RETRY_ATTEMPTS=3             # Retry attempts per provider
-```
-
-</details>
-
-## 📚 API Documentation
-
-### Interactive API Explorer
-
-Visit `http://localhost:3000/swagger/index.html` for complete API documentation.
-
-### Enhanced API Examples
-
-#### **Cost-Optimized Image Generation**
-
-```bash
-curl -X POST http://localhost:3000/v1/images/generations \
-  -H "Authorization: Bearer your-token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "A beautiful sunset over mountains",
-    "model": "dall-e-3",
-    "cost_optimization": "aggressive"
-  }'
-```
-
-#### **Multi-Task Request**
-
-```bash
-curl -X POST http://localhost:3000/v1/chat/completions \
-  -H "Authorization: Bearer your-token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [{"role": "user", "content": "Analyze sales data and create a chart"}],
-    "enable_task_decomposition": true,
-    "parallel_execution": true
-  }'
-```
-
-#### **Provider-Specific Routing**
-
-```bash
-curl -X POST http://localhost:3000/v1/chat/completions \
-  -H "Authorization: Bearer your-token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "provider_preference": ["unofficial", "community", "official"]
-  }'
-```
-
-### Enhanced Key Management API
-
-#### **Create Key with Cost Limits**
-
-```bash
-curl -X POST http://localhost:3000/api/v1/keys \
-  -H "Authorization: Bearer admin-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Development Key",
-    "tags": ["dev", "team-alpha"],
-    "cost_limit_usd": 100.00,
-    "rate_limit_rpm": 60,
-    "allowed_models": ["gpt-4", "dall-e-3"],
-    "enable_cost_optimization": true
-  }'
-```
-
-#### **Get Cost Analytics**
-
-```bash
-curl -H "Authorization: Bearer your-token" \
-  http://localhost:3000/api/v1/analytics/costs?period=30d
-```
-
-## 🔌 Enhanced Plugins
-
-### Task Master Plugin
-
-Intelligent request decomposition and parallel execution:
-
-- **Automatic Task Analysis**: Identifies subtasks in complex requests
-- **Parallel Execution**: Executes multiple tasks simultaneously
-- **Result Aggregation**: Combines results intelligently
-- **Cost Optimization**: Routes each subtask optimally
-
-### Cost Optimizer Plugin
-
-Dynamic provider selection for maximum savings:
-
-- **Real-time Cost Calculation**: Tracks costs across all provider tiers
-- **Quality vs Cost Trade-offs**: Balances quality requirements with cost savings
-- **Learning Algorithms**: Improves routing decisions over time
-- **Fallback Strategies**: Intelligent degradation when cheap providers fail
-
-### Provider Health Monitor Plugin
-
-Comprehensive health monitoring:
-
-- **Multi-tier Health Checks**: Monitors official, community, and unofficial APIs
-- **Circuit Breakers**: Automatically disable failing providers
-- **Performance Tracking**: Response times, success rates, quality metrics
-- **Auto-recovery**: Automatically re-enables providers when healthy
-
-### Session Manager Plugin
-
-Advanced session management for unofficial APIs:
-
-- **Cookie Rotation**: Automatic rotation to avoid detection
-- **Session Pooling**: Manage multiple sessions per provider
-- **Health-aware Routing**: Route to healthy sessions only
-- **Auto-refresh**: Automatically refresh expired sessions
-
-## 📈 Cost Optimization Dashboard
-
-Access the enhanced management panel at `http://localhost:3000/dashboard` to view:
-
-- **Real-time Cost Savings**: Live comparison vs traditional routing
-- **Provider Performance**: Success rates, response times, costs per provider
-- **Usage Analytics**: Request patterns, popular models, optimization opportunities
-- **Cost Trends**: Historical cost analysis and savings projections
-
-## 🛠️ Development
-
-### Prerequisites
-
-- Go 1.24+
-- Node.js 22+ (for enhanced dashboard)
-- PostgreSQL (recommended) or SQLite
-- Redis (required for session management)
-
-### Building from Source
-
-```bash
-# Clone repository
-git clone https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE.git
+git clone https://github.com/yourusername/Your-PaL-MoE.git
 cd Your-PaL-MoE
-
-# Build enhanced frontend
-cd web && npm install -g pnpm && pnpm install && pnpm run build && cp -r dist ../core/public/dist/ && cd ..
-
-# Build backend with enhanced features
-cd core && go build -o intelligent-ai-gateway .
-
-# Run with development configuration
-./intelligent-ai-gateway --config dev-config.yaml
+go mod tidy
 ```
 
-### Development Configuration
+### Configuration
 
+Create `providers.csv` with your AI providers:
+```csv
+ID,Name,Tier,Endpoint,APIKey,Model,CostPerToken,MaxTokens,Capabilities,AdditionalInfo
+openai_gpt4,OpenAI GPT-4,official,https://api.openai.com/v1,sk-xxx,gpt-4,0.00003,8192,chat;code;analysis,rate_limit:10000/min,tier:premium
+anthropic_claude,Anthropic Claude,official,https://api.anthropic.com/v1,xxx,claude-3-sonnet,0.000015,4096,chat;analysis,rate_limit:5000/min
+pollinations,Pollinations,community,https://text.pollinations.ai/openai,,openai,0.000001,2048,chat;creative,no_auth:true,free_tier:true
+local_llama,Local Llama,unofficial,http://localhost:8080,none,llama-2-7b,0,4096,chat,local:true,gpu_required:false
+```
+
+**CSV Format (5 columns):**
+1. **ID**: Unique identifier for the provider
+2. **Name**: Human-readable provider name  
+3. **Tier**: `official`, `community`, or `unofficial`
+4. **Endpoint**: API endpoint URL
+5. **APIKey**: Authentication key (or "none" for no auth)
+6. **Model**: Model identifier
+7. **CostPerToken**: Cost per token (numeric)
+8. **MaxTokens**: Maximum token limit
+9. **Capabilities**: Semicolon-separated list (chat;code;analysis)
+10. **AdditionalInfo**: *(New Column)* Extra information like `rate_limit:1000/min,tier:premium,no_auth:true`
+
+### Basic Usage
+
+```bash
+# Start the enhanced server
+go build -o enhanced-server cmd/enhanced-server/main.go
+./enhanced-server
+
+# Process a request
+curl -X POST http://localhost:8080/api/v1/process \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Analyze machine learning algorithms for recommendation systems",
+    "context": {"domain": "ai", "output_format": "markdown"},
+    "constraints": {"max_tokens": 1000}
+  }'
+```
+
+## Enhanced Pipeline Flow
+
+```
+📝 Initial Prompt → 🧠 SPO Analysis → 🎯 Provider Selection → 🚀 Task Execution
+       ↓                ↓                    ↓                    ↓
+   Complexity      Optimization        Intelligent           Parallel
+    Analysis        & Caching          Selection             Processing
+```
+
+### Step-by-Step Process
+
+1. **Task Reasoning**: Analyzes complexity across 4 dimensions (reasoning, knowledge, computation, coordination)
+2. **SPO Optimization**: Enhances prompts using 5 strategies (clarification, structure, context, constraints, examples)
+3. **Provider Selection**: Multi-criteria scoring considering cost, performance, latency, and reliability
+4. **Execution**: Parallel processing with performance monitoring and learning
+
+## API Endpoints
+
+### Core Endpoints
+```bash
+# Process a request with enhanced pipeline
+POST /api/v1/process
+
+# Get request status and results
+GET /api/v1/requests/{id}
+
+# List all providers with metrics
+GET /api/v1/providers
+
+# Get system performance metrics
+GET /api/v1/metrics
+```
+
+### Enhanced YAML Generation
+```bash
+# Generate YAML config for specific provider
+GET /api/v1/providers/{id}/yaml
+
+# Generate YAML configs for all providers
+POST /api/v1/providers/yaml/generate-all
+```
+
+### Example Response
+```json
+{
+  "id": "req_1234567890",
+  "complexity": {
+    "reasoning": 2, "knowledge": 3, "computation": 1, "coordination": 1,
+    "overall": 2, "score": 0.58
+  },
+  "optimized_prompt": {
+    "original": "Analyze machine learning algorithms",
+    "optimized": "Analyze machine learning algorithms\n\nPlease be specific and detailed...",
+    "improvements": ["Added detailed guidance", "Enhanced clarity"],
+    "confidence": 0.85, "cost_savings": 0.255
+  },
+  "assignment": {
+    "provider_id": "openai_gpt4", "confidence": 0.92,
+    "estimated_cost": 0.045, "reasoning": "Selected for high complexity analysis"
+  },
+  "status": "completed", "total_cost": 0.042, "total_duration": "2.3s"
+}
+```
+
+## AI-Powered YAML Generation
+
+The enhanced system can automatically generate YAML configurations from CSV entries using the **Pollinations API** (no-auth required):
+
+### Automatic Generation
+```bash
+# Generate YAML for a specific provider
+curl http://localhost:8080/api/v1/providers/openai_gpt4/yaml
+
+# Batch generate all provider YAMLs  
+curl -X POST http://localhost:8080/api/v1/providers/yaml/generate-all
+```
+
+### Example Generated YAML
 ```yaml
-# dev-config.yaml
-database:
-  dsn: "sqlite://./dev.db"
-redis:
-  url: "redis://localhost:6379"
-features:
-  cost_optimization: true
-  unofficial_apis: true
-  task_decomposition: true
-  parallel_execution: true
-logging:
-  level: debug
-  detailed_requests: true
+# OpenAI GPT-4 Provider Configuration
+provider:
+  id: openai_gpt4
+  name: "OpenAI GPT-4"
+  tier: official
+  
+api:
+  endpoint: "https://api.openai.com/v1"
+  authentication:
+    type: "bearer_token"
+    key: "${OPENAI_API_KEY}"
+    
+model:
+  name: "gpt-4"
+  temperature: 0.7
+  max_tokens: 8192
+  
+rate_limiting:
+  requests_per_minute: 10000
+  tier: "premium"
+  
+cost_tracking:
+  cost_per_token: 0.00003
+  billing_model: "per_token"
+  
+retry_config:
+  max_retries: 3
+  backoff_multiplier: 2
+  timeout_seconds: 30
 ```
 
-## 🤝 Contributing
+## Performance Metrics
 
-We welcome contributions to make AI more accessible and cost-effective!
+### Projected Improvements
+- **Task Success Rate**: 85% → 95% (+10%)
+- **Execution Efficiency**: 70% → 90% (+20%)
+- **Quality Score**: 75% → 88% (+13%)
+- **Cost Savings**: Maintains 70-90% optimization
 
-### Priority Areas
+### Real-Time Monitoring
+```bash
+# Get system metrics
+curl http://localhost:8080/api/v1/metrics
+```
 
-- 🔧 **New Provider Integrations**: Add support for more unofficial APIs
-- 💰 **Cost Optimization**: Improve routing algorithms and cost prediction
-- 🧠 **Task Decomposition**: Enhance request parsing and task identification
-- 📊 **Analytics**: Better insights and optimization recommendations
-- 🔐 **Security**: Enhanced session management and provider safety
+Returns:
+- Total/successful/failed requests
+- Average response time and cost savings
+- Provider health scores and performance trends
+- Active request count and system status
 
-### Development Process
+## Architecture
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Core Components
+- **TaskReasoningEngine**: Rule-based complexity analysis using regex patterns (no local AI models)
+- **SPOOptimizer**: Self-supervised prompt optimization with LRU caching
+- **AdaptiveProviderSelector**: Multi-criteria provider scoring with real-time adaptation
+- **YAMLGenerator**: AI-powered configuration generation via Pollinations API
+- **EnhancedSystem**: Main orchestrator with metrics tracking and performance monitoring
 
-## 📊 Benchmarks
+### Technology Stack
+- **Language**: Go 1.21+
+- **Concurrency**: Goroutines and channels for parallel processing
+- **HTTP Framework**: Gorilla Mux for REST API
+- **AI Integration**: Pollinations API for YAML generation
+- **Configuration**: CSV-based provider management
+- **Logging**: Structured logging with Logrus
 
-### Cost Comparison
+## Cost Optimization Strategy
 
-| Use Case | Traditional Cost | Our Gateway | Savings |
-|----------|------------------|-------------|---------|
-| Image Generation (DALL-E 3) | $0.040 | $0.004 | 90% |
-| Chat Completion (GPT-4) | $0.030 | $0.003 | 90% |
-| Code Generation | $0.025 | $0.005 | 80% |
-| Data Analysis | $0.020 | $0.002 | 90% |
+### Multi-Tier Routing
+1. **Official Providers** (OpenAI, Anthropic): High-quality, higher cost
+2. **Community Providers** (Pollinations, Together): Balanced quality/cost
+3. **Unofficial/Local**: Lowest cost, variable quality
 
-### Performance Metrics
+### Intelligent Selection
+- **Complexity Matching**: Route complex tasks to higher-tier providers
+- **Cost Efficiency**: Balance quality requirements with budget constraints  
+- **Performance Learning**: Adapt selection based on historical performance
+- **Fallback Strategy**: Automatic failover to alternative providers
 
-- **Response Time**: 15% faster due to parallel execution
-- **Success Rate**: 99.9% with intelligent failover
-- **Cost Savings**: Average 75-85% across all use cases
-- **Provider Uptime**: 99.95% effective uptime through redundancy
+## Use Cases
 
-## 📄 License
+### Development & Prototyping
+- **Local Testing**: Use unofficial/local providers for development
+- **Cost Control**: Automatic cost-aware provider selection
+- **Quality Assurance**: Multi-tier validation for production workloads
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Production Deployment
+- **High Availability**: Multi-provider redundancy with automatic failover
+- **Performance Optimization**: ML-inspired provider selection
+- **Cost Management**: Achieve 70-90% cost savings while maintaining quality
 
-## 🙏 Acknowledgments
+### Enterprise Integration
+- **Scalable Architecture**: Go concurrency handles high request volumes
+- **Monitoring & Analytics**: Comprehensive metrics and performance tracking
+- **Configuration Management**: Simple CSV-based provider administration
 
-- **labring/aiproxy**: Foundation architecture and plugin system
-- **bricks-cloud/BricksLLM**: Enterprise key management patterns
-- **DedInc/bingart**: Unofficial API integration inspiration
-- **OpenAI**: API specification and compatibility standards
-- **Community Contributors**: All developers making AI more accessible
+## Contributing
 
-## 🚀 Roadmap
+We welcome contributions! The enhanced system maintains the modular architecture of the original while adding intelligent capabilities.
 
-### Phase 1 (Current)
-- ✅ Multi-tier provider routing
-- ✅ Enhanced key management
-- ✅ Basic cost optimization
-- ✅ Unofficial API integration
+### Development Guidelines
+- Maintain cost optimization principles
+- Preserve Go concurrency advantages
+- Extend CSV compatibility for easy provider management
+- Focus on intelligence without complexity
 
-### Phase 2 (Q2 2025)
-- 🔄 Advanced task decomposition
-- 🔄 Machine learning-based routing
-- 🔄 Real-time cost prediction
-- 🔄 Enhanced analytics dashboard
+### Key Areas for Contribution
+1. **Advanced Task Decomposition**: Operator-based workflow systems
+2. **Quality Assurance**: Multi-tier validation frameworks  
+3. **Machine Learning**: Predictive provider selection models
+4. **Real-time Adaptation**: Dynamic provider performance tuning
 
-### Phase 3 (Q3 2025)
-- 📋 Custom model fine-tuning
-- 📋 Advanced workflow orchestration
-- 📋 Enterprise SSO integration
-- 📋 Multi-region deployment
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Support
+
+- **Documentation**: See `/docs` for detailed guides
+- **Issues**: Report bugs and feature requests via GitHub Issues
+- **Discussions**: Join community discussions for questions and ideas
 
 ---
 
-<div align="center">
-  <p><strong>Transform your AI costs from expense to competitive advantage</strong></p>
-  <p>⭐ Star us on GitHub | 🐛 Report Issues | 💡 Request Features</p>
-</div>
+**Your PaL MoE**: Cost-optimized AI routing with enhanced intelligence, maintaining simplicity while adding powerful features for task complexity analysis, self-supervised optimization, and adaptive provider selection.

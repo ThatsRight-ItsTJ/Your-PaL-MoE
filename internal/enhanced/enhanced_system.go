@@ -122,6 +122,9 @@ func (s *EnhancedSystem) initializeComponents(providersFile string) error {
 		return fmt.Errorf("failed to create provider selector: %w", err)
 	}
 	
+	// YAML Generator
+	s.yamlGenerator = NewYAMLGenerator(s.logger)
+	
 	return nil
 }
 
@@ -277,6 +280,25 @@ func (s *EnhancedSystem) GetRequest(requestID string) (*ProcessingRequest, error
 // GetProviders returns all available providers
 func (s *EnhancedSystem) GetProviders() []*Provider {
 	return s.providerSelector.GetProviders()
+}
+
+// GenerateProviderYAML generates YAML configuration for a provider
+func (s *EnhancedSystem) GenerateProviderYAML(ctx context.Context, providerID string) (string, error) {
+	providers := s.providerSelector.GetProviders()
+	
+	for _, provider := range providers {
+		if provider.ID == providerID {
+			return s.yamlGenerator.GenerateYAMLFromProvider(ctx, provider)
+		}
+	}
+	
+	return "", fmt.Errorf("provider not found: %s", providerID)
+}
+
+// GenerateAllProviderYAMLs generates YAML configurations for all providers
+func (s *EnhancedSystem) GenerateAllProviderYAMLs(ctx context.Context) (map[string]string, error) {
+	providers := s.providerSelector.GetProviders()
+	return s.yamlGenerator.GenerateYAMLBatch(ctx, providers)
 }
 
 // GetMetrics returns system metrics
