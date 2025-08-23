@@ -29,7 +29,8 @@ type Provider struct {
 	Tier         ProviderTier           `json:"tier"`
 	Endpoint     string                 `json:"endpoint"`
 	APIKey       string                 `json:"api_key"`
-	Model        string                 `json:"model"`
+	Models       []string               `json:"models"`        // Support multiple models
+	ModelsSource string                 `json:"models_source"` // Either "list" or API endpoint URL
 	CostPerToken float64                `json:"cost_per_token"`
 	MaxTokens    int                    `json:"max_tokens"`
 	Capabilities []string               `json:"capabilities"`
@@ -172,10 +173,46 @@ func (a *AdaptiveProviderSelector) parseProviderRecord(record []string) (*Provid
 		maxTokens = 4096
 	}
 	
+	// Parse models (column 5) - can be either model list or models endpoint URL
+	var models []string
+	var modelsSource string
+	
+	modelField := strings.TrimSpace(record[5])
+	if modelField != "" {
+		// Check if it's a URL (models endpoint)
+		if strings.HasPrefix(modelField, "http://") || strings.HasPrefix(modelField, "https://") {
+			modelsSource = modelField
+			// Models will be fetched from the endpoint later
+			models = []string{} // Empty initially, to be populated by API call
+		} else {
+			// It's a delimited list of models
+			modelsSource = "list"
+			// Split by | or , delimiter
+			if strings.Contains(modelField, "|") {
+				models = strings.Split(modelField, "|")
+			} else if strings.Contains(modelField, ",") {
+				models = strings.Split(modelField, ",")
+			} else if strings.Contains(modelField, ";") {
+				models = strings.Split(modelField, ";")
+			} else {
+				// Single model
+				models = []string{modelField}
+			}
+			
+			// Clean up model names
+			for i, model := range models {
+				models[i] = strings.TrimSpace(model)
+			}
+		}
+	}
+	
 	// Parse capabilities (column 8)
 	capabilities := []string{}
 	if len(record) > 8 && record[8] != "" {
 		capabilities = strings.Split(record[8], ";")
+		for i, cap := range capabilities {
+			capabilities[i] = strings.TrimSpace(cap)
+		}
 	}
 	
 	// Parse additional info (column 9) - new fifth column
@@ -183,16 +220,14 @@ func (a *AdaptiveProviderSelector) parseProviderRecord(record []string) (*Provid
 	if len(record) > 9 && record[9] != "" {
 		metadata["additional_info"] = record[9]
 		// Parse additional info for structured data like rate limits, costs, etc.
-		if strings.Contains(record[9], "rate_limit:") {
-			parts := strings.Split(record[9], ",")
-			for _, part := range parts {
-				if strings.Contains(part, ":") {
-					kv := strings.SplitN(part, ":", 2)
-					if len(kv) == 2 {
-						key := strings.TrimSpace(kv[0])
-						value := strings.TrimSpace(kv[1])
-						metadata[key] = value
-					}
+		parts := strings.Split(record[9], ",")
+		for _, part := range parts {
+			if strings.Contains(part, ":") {
+				kv := strings.SplitN(part, ":", 2)
+				if len(kv) == 2 {
+					key := strings.TrimSpace(kv[0])
+					value := strings.TrimSpace(kv[1])
+					metadata[key] = value
 				}
 			}
 		}
@@ -204,11 +239,156 @@ func (a *AdaptiveProviderSelector) parseProviderRecord(record []string) (*Provid
 		Tier:         ProviderTier(strings.ToLower(record[2])),
 		Endpoint:     record[3],
 		APIKey:       record[4],
-		Model:        record[5],
+		Models:       models,
+		ModelsSource: modelsSource,
 		CostPerToken: costPerToken,
 		MaxTokens:    maxTokens,
 		Capabilities: capabilities,
-		Metadata:     metadata,</to_replace>
+		Metadata:     metadata,
+		Metrics: ProviderMetrics{
+			SuccessRate:      0.9, // Default values
+			AverageLatency:   1000.0,
+			QualityScore:     0.8,
+			CostEfficiency:   0.7,
+			LastUpdated:      time.Now(),
+			RequestCount:     0,
+			ErrorCount:       0,
+			AverageCost:      costPerToken,
+			ReliabilityScore: 0.8,
+		},
+	}
+	
+	return provider, nil
+}</to_replace>
+</Editor.edit_file_by_replace>
+
+<Editor.edit_file_by_replace>
+<file_name>/workspace/Your-PaL-MoE/internal/enhanced/provider_selector.go</file_name>
+<to_replace>	return providers
+}
+
+// startWatcher starts the file system watcher for CSV changes</to_replace>
+<new_content>	return providers
+}
+
+// FetchModelsFromEndpoint fetches available models from a provider's models endpoint
+func (a *AdaptiveProviderSelector) FetchModelsFromEndpoint(ctx context.Context, provider *Provider) error {
+	if provider.ModelsSource == "list" || provider.ModelsSource == "" {
+		return nil // No need to fetch, models are already in the list
+	}
+	
+	a.logger.Debugf("Fetching models for provider %s from %s", provider.ID, provider.ModelsSource)
+	
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "GET", provider.ModelsSource, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	// Add authentication if API key is provided
+	if provider.APIKey != "" && provider.APIKey != "none" {
+		req.Header.Set("Authorization", "Bearer "+provider.APIKey)
+	}
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		a.logger.Warnf("Failed to fetch models for %s: %v", provider.ID, err)
+		return err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		a.logger.Warnf("Models endpoint returned status %d for provider %s", resp.StatusCode, provider.ID)
+		return fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+	
+	// Try to parse OpenAI-format response
+	var modelsResponse struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&modelsResponse); err != nil {
+		a.logger.Warnf("Failed to parse models response for %s: %v", provider.ID, err)
+		return err
+	}
+	
+	// Extract model IDs
+	models := make([]string, len(modelsResponse.Data))
+	for i, model := range modelsResponse.Data {
+		models[i] = model.ID
+	}
+	
+	// Update provider with fetched models
+	provider.Models = models
+	a.logger.Infof("Fetched %d models for provider %s: %v", len(models), provider.ID, models)
+	
+	return nil
+}
+
+// GetProviderByModel returns a provider that supports the specified model
+func (a *AdaptiveProviderSelector) GetProviderByModel(modelName string) *Provider {
+	a.providersMutex.RLock()
+	defer a.providersMutex.RUnlock()
+	
+	for _, provider := range a.providers {
+		for _, model := range provider.Models {
+			if model == modelName {
+				return provider
+			}
+		}
+	}
+	return nil
+}
+
+// ListAllModels returns all available models across all providers
+func (a *AdaptiveProviderSelector) ListAllModels() map[string][]string {
+	a.providersMutex.RLock()
+	defer a.providersMutex.RUnlock()
+	
+	result := make(map[string][]string)
+	for _, provider := range a.providers {
+		result[provider.ID] = provider.Models
+	}
+	return result
+}
+
+// startWatcher starts the file system watcher for CSV changes</to_replace>
+</Editor.edit_file_by_replace>
+
+<Editor.edit_file_by_replace>
+<file_name>/workspace/Your-PaL-MoE/internal/enhanced/provider_selector.go</file_name>
+<to_replace>import (
+	"context"
+	"encoding/csv"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/sirupsen/logrus"
+)</to_replace>
+<new_content>import (
+	"context"
+	"encoding/csv"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/sirupsen/logrus"
+)</to_replace>
 </Editor.edit_file_by_replace>
 
 <Editor.write>
