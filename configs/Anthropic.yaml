@@ -11,6 +11,10 @@ provider:
 models:
   source: "claude-3-5-sonnet|claude-3-haiku|claude-3-opus"
   dynamic_loading: false
+  available_models:
+    - "claude-3-5-sonnet"
+    - "claude-3-haiku"
+    - "claude-3-opus"
   
 configuration:
   timeout: "30s"
@@ -22,18 +26,18 @@ rate_limiting:
   
 capabilities:
   - chat
-
   - premium
-
+  - reasoning
 
 metadata:
   description: "High quality responses with reasoning"
   auto_generated: true
   csv_source: "providers.csv"
-  generated_at: "Fri Aug 22 20:41:02 PDT 2025"
+  generated_at: "2025-08-22 20:45:00"
   
 # Tier-specific configurations
 premium_features:
   high_rate_limits: true
   priority_support: true
   sla_guaranteed: true
+  advanced_reasoning: true

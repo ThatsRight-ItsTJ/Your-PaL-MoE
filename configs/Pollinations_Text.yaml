@@ -22,15 +22,13 @@ rate_limiting:
   
 capabilities:
   - chat
-
-
-
+  - creative
 
 metadata:
   description: "Free to use with a 10 requests per minute rate limit"
   auto_generated: true
   csv_source: "providers.csv"
-  generated_at: "Fri Aug 22 20:41:02 PDT 2025"
+  generated_at: "2025-08-22 20:45:00"
   
 # Tier-specific configurations
 community_features:
