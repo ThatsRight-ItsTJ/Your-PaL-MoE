@@ -30,26 +30,18 @@ go mod tidy
 ### Configuration
 
 Create `providers.csv` with your AI providers:
-```csv
-ID,Name,Tier,Endpoint,APIKey,Model,CostPerToken,MaxTokens,Capabilities,AdditionalInfo
-openai_gpt4,OpenAI GPT-4,official,https://api.openai.com/v1,sk-xxx,gpt-4,0.00003,8192,chat;code;analysis,rate_limit:10000/min,tier:premium
-anthropic_claude,Anthropic Claude,official,https://api.anthropic.com/v1,xxx,claude-3-sonnet,0.000015,4096,chat;analysis,rate_limit:5000/min
-pollinations,Pollinations,community,https://text.pollinations.ai/openai,,openai,0.000001,2048,chat;creative,no_auth:true,free_tier:true
-local_llama,Local Llama,unofficial,http://localhost:8080,none,llama-2-7b,0,4096,chat,local:true,gpu_required:false
+```bash
+cp providers.csv.template providers.csv
 ```
 
-**CSV Format (5 columns):**
-1. **ID**: Unique identifier for the provider
-2. **Name**: Human-readable provider name  
-3. **Tier**: `official`, `community`, or `unofficial`
+**CSV Format (6 columns):**
+1. **Name**: Human-readable provider name  
+2. **Tier**: `official`, `community`, or `unofficial`
 4. **Endpoint**: API endpoint URL
 5. **APIKey**: Authentication key (or "none" for no auth)
-6. **Model**: Model identifier
-7. **CostPerToken**: Cost per token (numeric)
-8. **MaxTokens**: Maximum token limit
-9. **Capabilities**: Semicolon-separated list (chat;code;analysis)
-10. **AdditionalInfo**: *(New Column)* Extra information like `rate_limit:1000/min,tier:premium,no_auth:true`
-
+6. **Model**: Can be a url endpoint (e.g. /models) or a delimited list 
+7. **Other**: Any other relevant information (Rate Limits, etc.)
+   
 ### Basic Usage
 
 ```bash
