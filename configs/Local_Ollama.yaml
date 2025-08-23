@@ -1,0 +1,39 @@
+# Configuration for Local_Ollama
+# Generated dynamically from CSV data
+# Tier: unofficial | Models: /api/tags
+
+provider:
+  name: "Local_Ollama"
+  tier: "unofficial"
+  base_url: "http://localhost:11434"
+  api_key: "none"
+
+models:
+  source: "/api/tags"
+  dynamic_loading: true
+  
+configuration:
+  timeout: "30s"
+  max_retries: 3
+  
+rate_limiting:
+  enabled: false
+  requests_per_minute: 100
+  
+capabilities:
+  - chat
+
+
+  - local
+
+metadata:
+  description: "Local deployment with full privacy"
+  auto_generated: true
+  csv_source: "providers.csv"
+  generated_at: "Fri Aug 22 20:41:02 PDT 2025"
+  
+# Tier-specific configurations
+unofficial_features:
+  local_deployment: true
+  privacy_focused: true
+  no_external_deps: true

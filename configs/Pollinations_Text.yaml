@@ -1,0 +1,39 @@
+# Configuration for Pollinations_Text
+# Generated dynamically from CSV data
+# Tier: community | Models: /models
+
+provider:
+  name: "Pollinations_Text"
+  tier: "community"
+  base_url: "https://text.pollinations.ai/"
+  api_key: ""
+
+models:
+  source: "/models"
+  dynamic_loading: true
+  
+configuration:
+  timeout: "30s"
+  max_retries: 3
+  
+rate_limiting:
+  enabled: true
+  requests_per_minute: 10
+  
+capabilities:
+  - chat
+
+
+
+
+metadata:
+  description: "Free to use with a 10 requests per minute rate limit"
+  auto_generated: true
+  csv_source: "providers.csv"
+  generated_at: "Fri Aug 22 20:41:02 PDT 2025"
+  
+# Tier-specific configurations
+community_features:
+  free_tier: true
+  rate_limited: true
+  best_effort: true

@@ -1,0 +1,39 @@
+# Configuration for OpenAI
+# Generated dynamically from CSV data
+# Tier: official | Models: gpt-3.5-turbo|gpt-4|gpt-4-turbo
+
+provider:
+  name: "OpenAI"
+  tier: "official"
+  base_url: "https://api.openai.com/v1"
+  api_key: "sk-xxx"
+
+models:
+  source: "gpt-3.5-turbo|gpt-4|gpt-4-turbo"
+  dynamic_loading: false
+  
+configuration:
+  timeout: "30s"
+  max_retries: 3
+  
+rate_limiting:
+  enabled: true
+  requests_per_minute: 100
+  
+capabilities:
+  - chat
+
+  - premium
+
+
+metadata:
+  description: "Premium service with high rate limits"
+  auto_generated: true
+  csv_source: "providers.csv"
+  generated_at: "Fri Aug 22 20:41:02 PDT 2025"
+  
+# Tier-specific configurations
+premium_features:
+  high_rate_limits: true
+  priority_support: true
+  sla_guaranteed: true

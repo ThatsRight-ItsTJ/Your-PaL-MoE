@@ -1,0 +1,39 @@
+# Configuration for Anthropic
+# Generated dynamically from CSV data
+# Tier: official | Models: claude-3-5-sonnet|claude-3-haiku|claude-3-opus
+
+provider:
+  name: "Anthropic"
+  tier: "official"
+  base_url: "https://api.anthropic.com/v1"
+  api_key: "xxx"
+
+models:
+  source: "claude-3-5-sonnet|claude-3-haiku|claude-3-opus"
+  dynamic_loading: false
+  
+configuration:
+  timeout: "30s"
+  max_retries: 3
+  
+rate_limiting:
+  enabled: false
+  requests_per_minute: 100
+  
+capabilities:
+  - chat
+
+  - premium
+
+
+metadata:
+  description: "High quality responses with reasoning"
+  auto_generated: true
+  csv_source: "providers.csv"
+  generated_at: "Fri Aug 22 20:41:02 PDT 2025"
+  
+# Tier-specific configurations
+premium_features:
+  high_rate_limits: true
+  priority_support: true
+  sla_guaranteed: true
