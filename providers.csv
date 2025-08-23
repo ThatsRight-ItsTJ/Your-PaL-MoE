@@ -1,4 +1,6 @@
-ID,Name,Tier,Endpoint,APIKey,Model,CostPerToken,MaxTokens,Capabilities,AdditionalInfo
-pollinations,Pollinations,community,https://text.pollinations.ai,,openai,0.000001,2048,chat;creative,no_auth:true,free_tier:true
-test_provider,Test Provider,community,https://example.com/api,,test-model,0.001,2048,chat,rate_limit:100/min
-local_llama,Local Llama,unofficial,http://localhost:8080,none,llama-2-7b,0,4096,chat,local:true,gpu_required:false
+Name,Tier,Base_URL,APIKey,Model(s),Other
+Pollinations_Text,community,https://text.pollinations.ai/,,/models,Free to use with a 10 requests per minute rate limit
+OpenAI,official,https://api.openai.com/v1,sk-xxx,gpt-3.5-turbo|gpt-4|gpt-4-turbo,Premium service with high rate limits
+Anthropic,official,https://api.anthropic.com/v1,xxx,claude-3-5-sonnet|claude-3-haiku|claude-3-opus,High quality responses with reasoning
+Local_Ollama,unofficial,http://localhost:11434,none,/api/tags,Local deployment with full privacy
+Together_AI,community,https://api.together.xyz/v1,xxx,llama-2-70b|llama-2-13b|mistral-7b,Open source models with competitive pricing

@@ -1,7 +1,9 @@
-ID,Name,Tier,Endpoint,APIKey,Models,CostPerToken,MaxTokens,Capabilities,AdditionalInfo
-openai,OpenAI,official,https://api.openai.com/v1,sk-xxx,https://api.openai.com/v1/models,0.00003,8192,chat;code;analysis,rate_limit:10000/min,tier:premium
-anthropic,Anthropic,official,https://api.anthropic.com/v1,xxx,claude-3-5-sonnet|claude-3-haiku|claude-3-opus,0.000015,4096,chat;analysis,rate_limit:5000/min,high_quality:true
-pollinations,Pollinations,community,https://text.pollinations.ai,,https://text.pollinations.ai/models,0.000001,2048,chat;creative,no_auth:true,free_tier:true
-together_ai,Together AI,community,https://api.together.xyz/v1,xxx,llama-2-70b|llama-2-13b|llama-2-7b|mistral-7b|codellama-34b,0.0000009,4096,chat;code,rate_limit:1000/min,open_source:true
-local_ollama,Local Ollama,unofficial,http://localhost:11434,none,http://localhost:11434/api/tags,0,4096,chat;code,local:true,gpu_required:false,privacy:high
-huggingface,HuggingFace,community,https://api-inference.huggingface.co,hf_xxx,gpt2|distilbert-base|t5-small,0.0000005,1024,chat;generation,rate_limit:500/min,free_tier:available
+Name,Tier,Base_URL,APIKey,Model(s),Other
+Pollinations_Text,community,https://text.pollinations.ai/,,/models,Free to use with a 10 requests per minute rate limit
+OpenAI,official,https://api.openai.com/v1,sk-xxx,gpt-3.5-turbo|gpt-4|gpt-4-turbo,Premium service with high rate limits and quality
+Anthropic,official,https://api.anthropic.com/v1,xxx,claude-3-5-sonnet|claude-3-haiku|claude-3-opus,High quality responses with advanced reasoning capabilities
+Local_Ollama,unofficial,http://localhost:11434,none,/api/tags,Local deployment with full privacy and no external dependencies
+Together_AI,community,https://api.together.xyz/v1,xxx,llama-2-70b|llama-2-13b|mistral-7b,Open source models with competitive pricing
+HuggingFace,community,https://api-inference.huggingface.co,hf_xxx,gpt2|distilbert-base|t5-small,Free tier available with various model options
+Groq,community,https://api.groq.com/openai/v1,gsk_xxx,llama3-8b-8192|llama3-70b-8192|mixtral-8x7b-32768,Ultra-fast inference with competitive rates
+Perplexity,community,https://api.perplexity.ai,pplx-xxx,llama-3-sonar-small|llama-3-sonar-large|codellama-34b,Real-time web search capabilities
