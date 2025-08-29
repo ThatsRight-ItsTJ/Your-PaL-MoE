@@ -49,13 +49,17 @@ type AdaptiveSelector struct {
 	performanceData map[string]*ProviderMetrics
 	weights         SelectionWeights
 	mutex           sync.RWMutex
+	yamlBuilder     *config.YAMLBuilder
 }
 
 // NewAdaptiveSelector creates a new adaptive provider selector
 func NewAdaptiveSelector(csvPath string) (*AdaptiveSelector, error) {
+	yamlBuilder := config.NewYAMLBuilder(csvPath, "./configs")
+	
 	selector := &AdaptiveSelector{
 		enhancedConfigs: make(map[string]*config.ProviderConfig),
 		performanceData: make(map[string]*ProviderMetrics),
+		yamlBuilder:     yamlBuilder,
 		weights: SelectionWeights{
 			Cost:        0.25,
 			Quality:     0.40,
@@ -65,15 +69,14 @@ func NewAdaptiveSelector(csvPath string) (*AdaptiveSelector, error) {
 	}
 
 	// Load CSV providers
-	builder := config.NewYAMLBuilder(csvPath, "./configs")
-	providers, err := selector.loadCSVProviders(builder)
+	providers, err := yamlBuilder.ReadCSV()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load CSV providers: %w", err)
 	}
 	selector.csvProviders = providers
 
 	// Try to load enhanced configurations
-	if err := builder.BuildFromCSV(); err == nil {
+	if err := yamlBuilder.BuildFromCSV(); err == nil {
 		selector.loadEnhancedConfigs("./configs")
 	}
 
@@ -390,16 +393,6 @@ func (as *AdaptiveSelector) generateCSVSelectionReasoning(score ProviderScore, c
 }
 
 // Helper functions
-
-func (as *AdaptiveSelector) loadCSVProviders(builder *config.YAMLBuilder) ([]config.CSVProvider, error) {
-	// Use a method that doesn't exist yet - let's create a simple CSV reader
-	return as.readCSVProviders()
-}
-
-func (as *AdaptiveSelector) readCSVProviders() ([]config.CSVProvider, error) {
-	// Simple CSV reading - this will be implemented properly
-	return []config.CSVProvider{}, nil
-}
 
 func (as *AdaptiveSelector) loadEnhancedConfigs(configDir string) error {
 	// Implementation would load YAML files from configDir
