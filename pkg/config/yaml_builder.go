@@ -119,7 +119,7 @@ func NewYAMLBuilder(csvPath, outputDir string) *YAMLBuilder {
 
 // BuildFromCSV processes CSV and generates enhanced YAML configurations
 func (yb *YAMLBuilder) BuildFromCSV() error {
-	providers, err := yb.readCSV()
+	providers, err := yb.ReadCSV()
 	if err != nil {
 		return fmt.Errorf("failed to read CSV: %w", err)
 	}
@@ -142,6 +142,41 @@ func (yb *YAMLBuilder) BuildFromCSV() error {
 	}
 
 	return nil
+}
+
+// ReadCSV reads providers from CSV file - public method for external use
+func (yb *YAMLBuilder) ReadCSV() ([]CSVProvider, error) {
+	file, err := os.Open(yb.csvPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	var providers []CSVProvider
+	for i, record := range records {
+		if i == 0 { // Skip header
+			continue
+		}
+
+		if len(record) >= 6 {
+			providers = append(providers, CSVProvider{
+				Name:     record[0],
+				Tier:     record[1],
+				Endpoint: record[2],
+				APIKey:   record[3],
+				Model:    record[4],
+				Other:    record[5],
+			})
+		}
+	}
+
+	return providers, nil
 }
 
 // buildProviderConfig creates enhanced configuration from CSV provider
@@ -445,39 +480,4 @@ func (yb *YAMLBuilder) saveYAML(config *ProviderConfig) error {
 
 	filename := fmt.Sprintf("%s/%s.yaml", yb.outputDir, config.ID)
 	return ioutil.WriteFile(filename, data, 0644)
-}
-
-// readCSV reads providers from CSV file
-func (yb *YAMLBuilder) readCSV() ([]CSVProvider, error) {
-	file, err := os.Open(yb.csvPath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-
-	var providers []CSVProvider
-	for i, record := range records {
-		if i == 0 { // Skip header
-			continue
-		}
-
-		if len(record) >= 6 {
-			providers = append(providers, CSVProvider{
-				Name:     record[0],
-				Tier:     record[1],
-				Endpoint: record[2],
-				APIKey:   record[3],
-				Model:    record[4],
-				Other:    record[5],
-			})
-		}
-	}
-
-	return providers, nil
 }
