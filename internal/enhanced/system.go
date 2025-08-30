@@ -16,33 +16,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// RequestInput represents an incoming request
-type RequestInput struct {
-	ID          string                 `json:"id"`
-	Content     string                 `json:"content"`
-	Context     map[string]interface{} `json:"context"`
-	Constraints map[string]interface{} `json:"constraints"`
-	Mode        string                 `json:"mode,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
-}
-
-// RequestResult represents the result of processing a request
-type RequestResult struct {
-	ID               string                        `json:"id"`
-	Status           string                        `json:"status"`
-	Complexity       analysis.TaskComplexity       `json:"complexity"`
-	OptimizedPrompt  optimization.OptimizationResult `json:"optimized_prompt"`
-	Assignment       selection.ProviderScore       `json:"assignment"`
-	Response         map[string]interface{}        `json:"response,omitempty"`
-	TotalCost        float64                       `json:"total_cost"`
-	TotalDuration    string                        `json:"total_duration"`
-	Error            string                        `json:"error,omitempty"`
-	CreatedAt        time.Time                     `json:"created_at"`
-	CompletedAt      *time.Time                    `json:"completed_at,omitempty"`
-}
-
-// EnhancedSystem integrates all components of the Kilocode-inspired improvements
-type EnhancedSystem struct {
+// LegacyEnhancedSystem integrates all components of the Kilocode-inspired improvements
+// Note: This is the legacy system, use EnhancedSystem from enhanced_system.go for new implementations
+type LegacyEnhancedSystem struct {
 	logger        *logrus.Logger
 	analyzer      *analysis.ComplexityAnalyzer
 	optimizer     *optimization.SPOOptimizer
@@ -63,19 +39,8 @@ type EnhancedSystem struct {
 	providersFile string
 }
 
-// SystemMetrics tracks system-wide performance
-type SystemMetrics struct {
-	TotalRequests      int64   `json:"total_requests"`
-	SuccessfulRequests int64   `json:"successful_requests"`
-	FailedRequests     int64   `json:"failed_requests"`
-	AverageResponseTime time.Duration `json:"average_response_time"`
-	AverageCostSavings float64 `json:"average_cost_savings"`
-	SystemUptime       time.Time `json:"system_uptime"`
-	ActiveRequests     int64   `json:"active_requests"`
-}
-
-// NewEnhancedSystem creates a new enhanced Your-PaL-MoE system
-func NewEnhancedSystem(logger *logrus.Logger, providersFile string) (*EnhancedSystem, error) {
+// NewLegacyEnhancedSystem creates a new legacy enhanced Your-PaL-MoE system
+func NewLegacyEnhancedSystem(logger *logrus.Logger, providersFile string) (*LegacyEnhancedSystem, error) {
 	// Initialize components
 	analyzer := analysis.NewComplexityAnalyzer()
 	optimizer := optimization.NewSPOOptimizer()
@@ -97,9 +62,11 @@ func NewEnhancedSystem(logger *logrus.Logger, providersFile string) (*EnhancedSy
 	}
 	
 	orchestrator := orchestration.NewOrchestrator(modeManager, selector)
-	yamlBuilder := config.NewYAMLBuilder(providersFile, "./configs")
+	yamlBuilder := config.NewYAMLBuilder()
+	yamlBuilder.SetCSVPath(providersFile)
+	yamlBuilder.SetConfigDir("./configs")
 	
-	system := &EnhancedSystem{
+	system := &LegacyEnhancedSystem{
 		logger:        logger,
 		analyzer:      analyzer,
 		optimizer:     optimizer,
@@ -119,12 +86,12 @@ func NewEnhancedSystem(logger *logrus.Logger, providersFile string) (*EnhancedSy
 		logger.Warnf("Could not generate enhanced YAML configs: %v", err)
 	}
 	
-	logger.Info("Enhanced Your-PaL-MoE system initialized successfully")
+	logger.Info("Legacy Enhanced Your-PaL-MoE system initialized successfully")
 	return system, nil
 }
 
 // ProcessRequest processes an incoming request through the enhanced pipeline
-func (es *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput) (*RequestResult, error) {
+func (es *LegacyEnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput) (*RequestResult, error) {
 	startTime := time.Now()
 	
 	// Create request result
@@ -154,12 +121,20 @@ func (es *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput
 	// Step 1: Task Complexity Analysis
 	es.logger.Infof("Analyzing complexity for request %s", input.ID)
 	complexity := es.analyzer.AnalyzeTask(input.Content, input.Context)
-	result.Complexity = complexity
+	result.Complexity = TaskComplexity{
+		Overall: ComplexityLevel(complexity.Overall),
+		Score:   complexity.Score,
+	}
 	
 	// Step 2: Self-Supervised Prompt Optimization
 	es.logger.Infof("Optimizing prompt for request %s", input.ID)
 	optimized := es.optimizer.OptimizePrompt(input.Content, input.Context)
-	result.OptimizedPrompt = optimized
+	result.OptimizedPrompt = OptimizedPrompt{
+		Original:    optimized.Original,
+		Optimized:   optimized.Optimized,
+		CostSavings: optimized.CostSavings,
+		Confidence:  optimized.Confidence,
+	}
 	
 	// Step 3: Adaptive Provider Selection
 	es.logger.Infof("Selecting provider for request %s", input.ID)
@@ -170,7 +145,11 @@ func (es *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput
 		es.updateMetrics(func(m *SystemMetrics) { m.FailedRequests++ })
 		return result, err
 	}
-	result.Assignment = providerScore
+	result.Assignment = ProviderAssignment{
+		ProviderID:    providerScore.ProviderID,
+		Confidence:    providerScore.Score,
+		EstimatedCost: providerScore.CostScore,
+	}
 	
 	// Step 4: Task Execution (simulated for now)
 	es.logger.Infof("Executing task for request %s with provider %s", input.ID, providerScore.ProviderID)
@@ -236,7 +215,6 @@ func (es *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput
 				es.updateMetrics(func(m *SystemMetrics) {
 					m.SuccessfulRequests++
 					m.AverageResponseTime = time.Duration((int64(m.AverageResponseTime) + int64(duration)) / 2)
-					m.AverageCostSavings = (m.AverageCostSavings + optimized.CostSavings) / 2
 				})
 				
 				es.logger.Infof("Request %s completed successfully in %v", input.ID, duration)
@@ -257,7 +235,7 @@ func (es *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput
 }
 
 // GetRequest retrieves a request result by ID
-func (es *EnhancedSystem) GetRequest(requestID string) (*RequestResult, error) {
+func (es *LegacyEnhancedSystem) GetRequest(requestID string) (*RequestResult, error) {
 	es.requestsMutex.RLock()
 	defer es.requestsMutex.RUnlock()
 	
@@ -270,7 +248,7 @@ func (es *EnhancedSystem) GetRequest(requestID string) (*RequestResult, error) {
 }
 
 // GetProviders returns information about all providers
-func (es *EnhancedSystem) GetProviders() map[string]interface{} {
+func (es *LegacyEnhancedSystem) GetProviders() map[string]interface{} {
 	metrics := es.selector.GetProviderMetrics()
 	modes := es.modeManager.ListModes()
 	
@@ -282,7 +260,7 @@ func (es *EnhancedSystem) GetProviders() map[string]interface{} {
 }
 
 // GetMetrics returns system performance metrics
-func (es *EnhancedSystem) GetMetrics() SystemMetrics {
+func (es *LegacyEnhancedSystem) GetMetrics() SystemMetrics {
 	es.metricsMutex.RLock()
 	defer es.metricsMutex.RUnlock()
 	
@@ -292,14 +270,14 @@ func (es *EnhancedSystem) GetMetrics() SystemMetrics {
 }
 
 // GenerateProviderYAML generates YAML configuration for a specific provider
-func (es *EnhancedSystem) GenerateProviderYAML(ctx context.Context, providerID string) (string, error) {
+func (es *LegacyEnhancedSystem) GenerateProviderYAML(ctx context.Context, providerID string) (string, error) {
 	// This would generate YAML for a specific provider
 	// For now, return a placeholder
 	return fmt.Sprintf("# YAML configuration for provider: %s\n# Generated at: %s\n", providerID, time.Now().Format(time.RFC3339)), nil
 }
 
 // GenerateAllProviderYAMLs generates YAML configurations for all providers
-func (es *EnhancedSystem) GenerateAllProviderYAMLs(ctx context.Context) (map[string]string, error) {
+func (es *LegacyEnhancedSystem) GenerateAllProviderYAMLs(ctx context.Context) (map[string]string, error) {
 	if err := es.yamlBuilder.BuildFromCSV(); err != nil {
 		return nil, fmt.Errorf("failed to build YAML configurations: %w", err)
 	}
@@ -314,22 +292,22 @@ func (es *EnhancedSystem) GenerateAllProviderYAMLs(ctx context.Context) (map[str
 }
 
 // Shutdown gracefully shuts down the enhanced system
-func (es *EnhancedSystem) Shutdown() {
-	es.logger.Info("Shutting down Enhanced Your-PaL-MoE system...")
+func (es *LegacyEnhancedSystem) Shutdown() {
+	es.logger.Info("Shutting down Legacy Enhanced Your-PaL-MoE system...")
 	es.orchestrator.Shutdown()
 	es.optimizer.ClearCache()
-	es.logger.Info("Enhanced system shutdown completed")
+	es.logger.Info("Legacy enhanced system shutdown completed")
 }
 
 // Helper methods
 
-func (es *EnhancedSystem) updateMetrics(updateFunc func(*SystemMetrics)) {
+func (es *LegacyEnhancedSystem) updateMetrics(updateFunc func(*SystemMetrics)) {
 	es.metricsMutex.Lock()
 	defer es.metricsMutex.Unlock()
 	updateFunc(&es.metrics)
 }
 
-func (es *EnhancedSystem) estimateCost(optimized optimization.OptimizationResult, provider selection.ProviderScore) float64 {
+func (es *LegacyEnhancedSystem) estimateCost(optimized optimization.OptimizationResult, provider selection.ProviderScore) float64 {
 	// Simple cost estimation based on prompt length and provider
 	baseTokens := float64(len(optimized.Optimized)) / 4.0 // Rough token estimation
 	baseCost := baseTokens * 0.00002 // $0.02 per 1k tokens baseline

@@ -11,17 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// OptimizedPrompt represents a prompt that has been optimized through SPO
-type OptimizedPrompt struct {
-	Original     string            `json:"original"`
-	Optimized    string            `json:"optimized"`
-	Iterations   int               `json:"iterations"`
-	Improvements []string          `json:"improvements"`
-	Confidence   float64           `json:"confidence"`
-	CostSavings  float64           `json:"cost_savings"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
-}
-
 // SPOOptimizer implements self-supervised prompt optimization
 type SPOOptimizer struct {
 	logger *logrus.Logger
