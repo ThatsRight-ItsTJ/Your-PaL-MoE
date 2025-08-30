@@ -54,7 +54,9 @@ type AdaptiveSelector struct {
 
 // NewAdaptiveSelector creates a new adaptive provider selector
 func NewAdaptiveSelector(csvPath string) (*AdaptiveSelector, error) {
-	yamlBuilder := config.NewYAMLBuilder(csvPath, "./configs")
+	yamlBuilder := config.NewYAMLBuilder()
+	yamlBuilder.SetCSVPath(csvPath)
+	yamlBuilder.SetConfigDir("./configs")
 	
 	selector := &AdaptiveSelector{
 		enhancedConfigs: make(map[string]*config.ProviderConfig),
