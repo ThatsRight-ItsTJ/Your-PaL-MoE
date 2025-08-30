@@ -18,45 +18,152 @@ A cost-optimized AI router that automatically selects the best provider for each
 - **Performance Tracking**: Continuous metrics collection and provider health monitoring
 - **AI-Powered YAML Generation**: Automated provider configuration using Pollinations API
 
-## Quick Start
+## Requirements
 
-### Installation
+### System Requirements
+- **Go**: Version 1.21 or higher (tested with Go 1.21+)
+- **Operating System**: Linux, macOS, or Windows
+- **Memory**: Minimum 512MB RAM
+- **Network**: Internet connection for external AI providers
+
+### Go Installation
+If Go is not installed on your system:
+
+#### Linux/macOS:
 ```bash
-git clone https://github.com/yourusername/Your-PaL-MoE.git
+# Download and install Go 1.21+
+wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Windows:
+Download the installer from [https://golang.org/dl/](https://golang.org/dl/) and follow the installation wizard.
+
+#### Verify Installation:
+```bash
+go version
+# Should output: go version go1.21.x
+```
+
+## Installation
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/ThatsRight-ItsTJ/Your-PaL-MoE.git
 cd Your-PaL-MoE
+```
+
+### 2. Install Dependencies
+```bash
+# Download and install Go modules
+go mod download
 go mod tidy
 ```
 
-### Configuration
-
-Create `providers.csv` with your AI providers:
+### 3. Build the Enhanced Server
 ```bash
+# Build the main enhanced server
+go build -o enhanced-server cmd/enhanced-server/main.go
+
+# Verify the build
+ls -la enhanced-server
+```
+
+## Configuration
+
+### 1. Create Provider Configuration
+```bash
+# Copy the template to create your providers configuration
 cp providers.csv.template providers.csv
 ```
 
+### 2. Edit Provider Settings
+Edit `providers.csv` with your AI provider credentials:
+
 **CSV Format (6 columns):**
+```csv
+Name,Tier,Base_URL,APIKey,Model(s),Other
+OpenAI,official,https://api.openai.com/v1,sk-your-key-here,gpt-3.5-turbo|gpt-4|gpt-4-turbo,Premium service with high rate limits
+Anthropic,official,https://api.anthropic.com/v1,your-api-key,claude-3-5-sonnet|claude-3-haiku,High quality responses
+Local_Ollama,unofficial,http://localhost:11434,none,/api/tags,Local deployment with full privacy
+```
+
+**Column Descriptions:**
 1. **Name**: Human-readable provider name  
 2. **Tier**: `official`, `community`, or `unofficial`
-4. **Endpoint**: API endpoint URL
-5. **APIKey**: Authentication key (or "none" for no auth)
-6. **Model**: Can be a url endpoint (e.g. /models) or a delimited list 
-7. **Other**: Any other relevant information (Rate Limits, etc.)
-   
-### Basic Usage
+3. **Base_URL**: API endpoint URL
+4. **APIKey**: Authentication key (or "none" for no auth)
+5. **Model(s)**: Can be a URL endpoint (e.g. /models) or a pipe-delimited list 
+6. **Other**: Additional information (Rate Limits, descriptions, etc.)
 
+### 3. Optional: Create Agents Configuration
 ```bash
-# Start the enhanced server
-go build -o enhanced-server cmd/enhanced-server/main.go
+# The system will auto-create agents.csv with defaults, or you can customize it
+# agents.csv defines specialized agents for different task types
+```
+
+## Basic Usage
+
+### 1. Start the Enhanced Server
+```bash
+# Start with default providers.csv
 ./enhanced-server
 
-# Process a request
+# Or specify a custom providers file
+./enhanced-server custom-providers.csv
+```
+
+The server will start on port 8080 and display:
+```
+INFO[0000] Enhanced Your-PaL-MoE system initialized successfully
+INFO[0000] Starting Enhanced Your PaL MoE server on :8080
+```
+
+### 2. Verify Server Health
+```bash
+# Check if the server is running
+curl http://localhost:8080/health
+
+# Expected response:
+# {"status":"healthy","timestamp":1234567890,"version":"enhanced-1.0.0"}
+```
+
+### 3. Process Your First Request
+```bash
+# Simple request
+curl -X POST http://localhost:8080/api/v1/process \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Hello, how are you?",
+    "context": {"domain": "general"}
+  }'
+
+# Complex analysis request
 curl -X POST http://localhost:8080/api/v1/process \
   -H "Content-Type: application/json" \
   -d '{
     "content": "Analyze machine learning algorithms for recommendation systems",
     "context": {"domain": "ai", "output_format": "markdown"},
-    "constraints": {"max_tokens": 1000}
+    "constraints": {"max_tokens": 1000, "quality_threshold": 0.8}
   }'
+```
+
+### 4. View Available Providers
+```bash
+# List all configured providers with metrics
+curl http://localhost:8080/api/v1/providers | jq '.'
+```
+
+### 5. Generate YAML Configurations
+```bash
+# Generate YAML for a specific provider
+curl http://localhost:8080/api/v1/providers/openai/yaml
+
+# Generate YAML configs for all providers
+curl -X POST http://localhost:8080/api/v1/providers/yaml/generate-all
 ```
 
 ## Enhanced Pipeline Flow
@@ -69,7 +176,6 @@ curl -X POST http://localhost:8080/api/v1/process \
 ```
 
 ### Step-by-Step Process
-
 1. **Task Reasoning**: Analyzes complexity across 4 dimensions (reasoning, knowledge, computation, coordination)
 2. **SPO Optimization**: Enhances prompts using 5 strategies (clarification, structure, context, constraints, examples)
 3. **Provider Selection**: Multi-criteria scoring considering cost, performance, latency, and reliability
@@ -90,6 +196,9 @@ GET /api/v1/providers
 
 # Get system performance metrics
 GET /api/v1/metrics
+
+# Server health check
+GET /health
 ```
 
 ### Enhanced YAML Generation
@@ -101,72 +210,66 @@ GET /api/v1/providers/{id}/yaml
 POST /api/v1/providers/yaml/generate-all
 ```
 
-### Example Response
-```json
-{
-  "id": "req_1234567890",
-  "complexity": {
-    "reasoning": 2, "knowledge": 3, "computation": 1, "coordination": 1,
-    "overall": 2, "score": 0.58
-  },
-  "optimized_prompt": {
-    "original": "Analyze machine learning algorithms",
-    "optimized": "Analyze machine learning algorithms\n\nPlease be specific and detailed...",
-    "improvements": ["Added detailed guidance", "Enhanced clarity"],
-    "confidence": 0.85, "cost_savings": 0.255
-  },
-  "assignment": {
-    "provider_id": "openai_gpt4", "confidence": 0.92,
-    "estimated_cost": 0.045, "reasoning": "Selected for high complexity analysis"
-  },
-  "status": "completed", "total_cost": 0.042, "total_duration": "2.3s"
-}
-```
+## Testing
 
-## AI-Powered YAML Generation
-
-The enhanced system can automatically generate YAML configurations from CSV entries using the **Pollinations API** (no-auth required):
-
-### Automatic Generation
+### Run Built-in Tests
 ```bash
-# Generate YAML for a specific provider
-curl http://localhost:8080/api/v1/providers/openai_gpt4/yaml
+# Test dynamic YAML generation
+./test_dynamic_yaml.sh
 
-# Batch generate all provider YAMLs  
-curl -X POST http://localhost:8080/api/v1/providers/yaml/generate-all
+# Run end-to-end tests
+./test_end_to_end_simple.sh
+
+# Test multi-model functionality
+./test_multi_model.sh
 ```
 
-### Example Generated YAML
-```yaml
-# OpenAI GPT-4 Provider Configuration
-provider:
-  id: openai_gpt4
-  name: "OpenAI GPT-4"
-  tier: official
-  
-api:
-  endpoint: "https://api.openai.com/v1"
-  authentication:
-    type: "bearer_token"
-    key: "${OPENAI_API_KEY}"
-    
-model:
-  name: "gpt-4"
-  temperature: 0.7
-  max_tokens: 8192
-  
-rate_limiting:
-  requests_per_minute: 10000
-  tier: "premium"
-  
-cost_tracking:
-  cost_per_token: 0.00003
-  billing_model: "per_token"
-  
-retry_config:
-  max_retries: 3
-  backoff_multiplier: 2
-  timeout_seconds: 30
+### Manual Testing
+```bash
+# Test different complexity levels
+curl -X POST http://localhost:8080/api/v1/process -d '{"content": "Simple task"}'
+curl -X POST http://localhost:8080/api/v1/process -d '{"content": "Complex analysis requiring deep reasoning"}'
+
+# Monitor system metrics
+curl http://localhost:8080/api/v1/metrics
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. "go: command not found"
+```bash
+# Install Go following the Requirements section above
+go version  # Should show go1.21.x or higher
+```
+
+#### 2. "providers.csv not found"
+```bash
+# Create from template
+cp providers.csv.template providers.csv
+# Edit with your API keys
+```
+
+#### 3. "failed to initialize selector"
+```bash
+# Check providers.csv format
+head -5 providers.csv
+# Ensure 6 columns: Name,Tier,Base_URL,APIKey,Model(s),Other
+```
+
+#### 4. Port 8080 already in use
+```bash
+# Check what's using the port
+lsof -i :8080
+# Kill the process or modify the server code to use a different port
+```
+
+#### 5. API key authentication errors
+```bash
+# Verify your API keys in providers.csv
+# Check provider documentation for correct key format
+# Test with curl directly to the provider's API
 ```
 
 ## Performance Metrics
@@ -179,8 +282,8 @@ retry_config:
 
 ### Real-Time Monitoring
 ```bash
-# Get system metrics
-curl http://localhost:8080/api/v1/metrics
+# Get comprehensive system metrics
+curl http://localhost:8080/api/v1/metrics | jq '.'
 ```
 
 Returns:
