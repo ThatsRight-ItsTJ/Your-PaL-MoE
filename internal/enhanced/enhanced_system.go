@@ -52,21 +52,22 @@ type SystemMetrics struct {
 // EnhancedSystem represents the main enhanced Your PaL MoE system
 type EnhancedSystem struct {
 	logger *logrus.Logger
-	
+
 	// Core components
 	reasoning        *TaskReasoningEngine
 	spoOptimizer     *SPOOptimizer
 	providerSelector *AdaptiveProviderSelector
-	
+	yamlGenerator    *YAMLGenerator
+
 	// Configuration
 	maxParallelTasks int
 	taskTimeout      time.Duration
-	
+
 	// State management
 	activeRequests map[string]*ProcessingRequest
 	mutex          sync.RWMutex
 	metrics        *SystemMetrics
-	
+
 	// Context for cancellation
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -75,7 +76,7 @@ type EnhancedSystem struct {
 // NewEnhancedSystem creates a new enhanced Your PaL MoE system
 func NewEnhancedSystem(logger *logrus.Logger, providersFile string) (*EnhancedSystem, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	system := &EnhancedSystem{
 		logger:           logger,
 		maxParallelTasks: 10,
@@ -88,50 +89,50 @@ func NewEnhancedSystem(logger *logrus.Logger, providersFile string) (*EnhancedSy
 			LastUpdated:          time.Now(),
 		},
 	}
-	
+
 	// Initialize components
 	if err := system.initializeComponents(providersFile); err != nil {
 		return nil, fmt.Errorf("failed to initialize components: %w", err)
 	}
-	
+
 	// Start background tasks
 	go system.metricsCollector()
-	
+
 	return system, nil
 }
 
 // initializeComponents initializes all system components
 func (s *EnhancedSystem) initializeComponents(providersFile string) error {
 	var err error
-	
+
 	// Task Reasoning Engine
 	s.reasoning, err = NewTaskReasoningEngine(s.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create reasoning engine: %w", err)
 	}
-	
+
 	// SPO Optimizer
 	s.spoOptimizer, err = NewSPOOptimizer(s.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create SPO optimizer: %w", err)
 	}
-	
+
 	// Provider Selector
 	s.providerSelector, err = NewAdaptiveProviderSelector(s.logger, providersFile)
 	if err != nil {
 		return fmt.Errorf("failed to create provider selector: %w", err)
 	}
-	
+
 	// YAML Generator
 	s.yamlGenerator = NewYAMLGenerator(s.logger)
-	
+
 	return nil
 }
 
 // ProcessRequest processes a request through the enhanced pipeline
 func (s *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput) (*ProcessingRequest, error) {
 	s.logger.Infof("Processing request: %s", input.ID)
-	
+
 	// Create processing request
 	request := &ProcessingRequest{
 		ID:        input.ID,
@@ -139,12 +140,12 @@ func (s *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput)
 		Status:    StatusPending,
 		CreatedAt: time.Now(),
 	}
-	
+
 	// Store active request
 	s.mutex.Lock()
 	s.activeRequests[input.ID] = request
 	s.mutex.Unlock()
-	
+
 	// Process through enhanced pipeline
 	if err := s.processPipeline(ctx, request); err != nil {
 		request.Status = StatusFailed
@@ -153,15 +154,15 @@ func (s *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput)
 		s.updateMetrics(request, false)
 		return request, err
 	}
-	
+
 	request.Status = StatusCompleted
 	completedAt := time.Now()
 	request.CompletedAt = &completedAt
 	request.TotalDuration = completedAt.Sub(request.CreatedAt)
-	
+
 	// Update metrics
 	s.updateMetrics(request, true)
-	
+
 	s.logger.Infof("Request %s completed in %v", input.ID, request.TotalDuration)
 	return request, nil
 }
@@ -169,7 +170,7 @@ func (s *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput)
 // processPipeline processes a request through the enhanced pipeline
 func (s *EnhancedSystem) processPipeline(ctx context.Context, request *ProcessingRequest) error {
 	startTime := time.Now()
-	
+
 	// Step 1: Task Reasoning and Complexity Analysis
 	s.logger.Infof("Step 1: Analyzing task complexity for request %s", request.ID)
 	complexity, err := s.reasoning.AnalyzeComplexity(ctx, request.Input)
@@ -177,7 +178,7 @@ func (s *EnhancedSystem) processPipeline(ctx context.Context, request *Processin
 		return fmt.Errorf("complexity analysis failed: %w", err)
 	}
 	request.Complexity = complexity
-	
+
 	// Step 2: SPO Analysis and Prompt Optimization
 	s.logger.Infof("Step 2: Optimizing prompt for request %s", request.ID)
 	optimizedPrompt, err := s.spoOptimizer.OptimizePrompt(ctx, request.Input.Content, complexity)
@@ -185,13 +186,13 @@ func (s *EnhancedSystem) processPipeline(ctx context.Context, request *Processin
 		return fmt.Errorf("prompt optimization failed: %w", err)
 	}
 	request.OptimizedPrompt = optimizedPrompt
-	
+
 	// Step 3: Extract requirements for provider selection
 	requirements, err := s.reasoning.ExtractRequirements(ctx, request.Input)
 	if err != nil {
 		return fmt.Errorf("requirement extraction failed: %w", err)
 	}
-	
+
 	// Step 4: Adaptive Provider Selection
 	s.logger.Infof("Step 4: Selecting provider for request %s", request.ID)
 	assignment, err := s.providerSelector.SelectOptimalProvider(ctx, request.ID, complexity, requirements)
@@ -199,11 +200,11 @@ func (s *EnhancedSystem) processPipeline(ctx context.Context, request *Processin
 		return fmt.Errorf("provider selection failed: %w", err)
 	}
 	request.Assignment = assignment
-	
+
 	// Step 5: Execute task (simulated for now)
 	s.logger.Infof("Step 5: Executing task for request %s with provider %s", request.ID, assignment.ProviderID)
 	request.Status = StatusRunning
-	
+
 	// Simulate task execution
 	result, cost, err := s.simulateTaskExecution(ctx, request.OptimizedPrompt.Optimized, assignment)
 	if err != nil {
@@ -212,15 +213,15 @@ func (s *EnhancedSystem) processPipeline(ctx context.Context, request *Processin
 			float64(time.Since(startTime).Milliseconds()), 0)
 		return fmt.Errorf("task execution failed: %w", err)
 	}
-	
+
 	request.Result = result
 	request.TotalCost = cost
-	
+
 	// Update provider metrics for success
 	qualityScore := s.calculateQualityScore(result, complexity)
 	s.providerSelector.UpdateProviderMetrics(ctx, assignment.ProviderID, true, cost, 
 		float64(time.Since(startTime).Milliseconds()), qualityScore)
-	
+
 	return nil
 }
 
@@ -228,7 +229,7 @@ func (s *EnhancedSystem) processPipeline(ctx context.Context, request *Processin
 func (s *EnhancedSystem) simulateTaskExecution(ctx context.Context, prompt string, assignment ProviderAssignment) (string, float64, error) {
 	// Simulate processing time based on complexity
 	processingTime := time.Duration(assignment.EstimatedTime) * time.Millisecond
-	
+
 	select {
 	case <-ctx.Done():
 		return "", 0, ctx.Err()
@@ -244,23 +245,23 @@ func (s *EnhancedSystem) simulateTaskExecution(ctx context.Context, prompt strin
 func (s *EnhancedSystem) calculateQualityScore(result string, complexity TaskComplexity) float64 {
 	// Simple heuristic based on result length and complexity
 	baseScore := 0.7
-	
+
 	if len(result) > 50 {
 		baseScore += 0.1
 	}
 	if len(result) > 200 {
 		baseScore += 0.1
 	}
-	
+
 	// Adjust for complexity
 	if complexity.Overall >= High {
 		baseScore += 0.1
 	}
-	
+
 	if baseScore > 1.0 {
 		baseScore = 1.0
 	}
-	
+
 	return baseScore
 }
 
@@ -268,12 +269,12 @@ func (s *EnhancedSystem) calculateQualityScore(result string, complexity TaskCom
 func (s *EnhancedSystem) GetRequest(requestID string) (*ProcessingRequest, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	
+
 	request, exists := s.activeRequests[requestID]
 	if !exists {
 		return nil, fmt.Errorf("request not found: %s", requestID)
 	}
-	
+
 	return request, nil
 }
 
@@ -285,13 +286,13 @@ func (s *EnhancedSystem) GetProviders() []*Provider {
 // GenerateProviderYAML generates YAML configuration for a provider
 func (s *EnhancedSystem) GenerateProviderYAML(ctx context.Context, providerID string) (string, error) {
 	providers := s.providerSelector.GetProviders()
-	
+
 	for _, provider := range providers {
 		if provider.ID == providerID {
 			return s.yamlGenerator.GenerateYAMLFromProvider(ctx, provider)
 		}
 	}
-	
+
 	return "", fmt.Errorf("provider not found: %s", providerID)
 }
 
@@ -305,17 +306,17 @@ func (s *EnhancedSystem) GenerateAllProviderYAMLs(ctx context.Context) (map[stri
 func (s *EnhancedSystem) GetMetrics() *SystemMetrics {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	
+
 	// Update active requests count
 	s.metrics.ActiveRequests = len(s.activeRequests)
 	s.metrics.LastUpdated = time.Now()
-	
+
 	// Update provider health scores
 	providers := s.providerSelector.GetProviders()
 	for _, provider := range providers {
 		s.metrics.ProviderHealthScores[provider.ID] = s.calculateHealthScore(provider)
 	}
-	
+
 	return s.metrics
 }
 
@@ -323,23 +324,23 @@ func (s *EnhancedSystem) GetMetrics() *SystemMetrics {
 func (s *EnhancedSystem) updateMetrics(request *ProcessingRequest, success bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	
+
 	s.metrics.TotalRequests++
 	if success {
 		s.metrics.SuccessfulRequests++
 	} else {
 		s.metrics.FailedRequests++
 	}
-	
+
 	// Update average response time
 	if request.CompletedAt != nil {
 		duration := request.CompletedAt.Sub(request.CreatedAt).Seconds()
 		s.metrics.AverageResponseTime = (s.metrics.AverageResponseTime*float64(s.metrics.TotalRequests-1) + duration) / float64(s.metrics.TotalRequests)
 	}
-	
+
 	// Update total cost
 	s.metrics.TotalCost += request.TotalCost
-	
+
 	// Estimate cost savings from optimization
 	if request.OptimizedPrompt.CostSavings > 0 {
 		s.metrics.CostSavings += request.OptimizedPrompt.CostSavings * request.TotalCost
@@ -349,24 +350,24 @@ func (s *EnhancedSystem) updateMetrics(request *ProcessingRequest, success bool)
 // calculateHealthScore calculates a health score for a provider
 func (s *EnhancedSystem) calculateHealthScore(provider *Provider) float64 {
 	metrics := provider.Metrics
-	
+
 	// Calculate weighted health score
 	successWeight := 0.4
 	latencyWeight := 0.2
 	qualityWeight := 0.3
 	reliabilityWeight := 0.1
-	
+
 	// Normalize latency score (lower is better)
 	latencyScore := 1.0
 	if metrics.AverageLatency > 0 {
 		latencyScore = 1.0 / (1.0 + metrics.AverageLatency/1000.0)
 	}
-	
+
 	healthScore := successWeight*metrics.SuccessRate +
 		latencyWeight*latencyScore +
 		qualityWeight*metrics.QualityScore +
 		reliabilityWeight*metrics.ReliabilityScore
-	
+
 	return healthScore
 }
 
@@ -374,7 +375,7 @@ func (s *EnhancedSystem) calculateHealthScore(provider *Provider) float64 {
 func (s *EnhancedSystem) metricsCollector() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -389,7 +390,7 @@ func (s *EnhancedSystem) metricsCollector() {
 func (s *EnhancedSystem) collectMetrics() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	
+
 	// Clean up completed requests older than 1 hour
 	cutoff := time.Now().Add(-1 * time.Hour)
 	for id, request := range s.activeRequests {
@@ -397,7 +398,7 @@ func (s *EnhancedSystem) collectMetrics() {
 			delete(s.activeRequests, id)
 		}
 	}
-	
+
 	// Update provider health scores
 	providers := s.providerSelector.GetProviders()
 	for _, provider := range providers {
