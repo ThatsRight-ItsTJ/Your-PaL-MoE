@@ -10,8 +10,8 @@ import (
     "time"
 
     "github.com/gorilla/mux"
-    "github.com/intelligent-ai-gateway/pkg/providers"
-    "github.com/intelligent-ai-gateway/pkg/analytics"
+    "github.com/Your-PaL-MoE/pkg/providers"
+    "github.com/Your-PaL-MoE/pkg/analytics"
 )
 
 type AdminHandler struct {
