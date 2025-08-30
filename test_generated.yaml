@@ -1,1 +1,0 @@
-```yaml provider: test_provider endpoint: https://example.com/api model: test-model cost: 0.001 ```
