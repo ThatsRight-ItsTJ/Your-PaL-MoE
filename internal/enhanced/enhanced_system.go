@@ -9,46 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ExecutionStatus represents the status of task execution
-type ExecutionStatus string
-
-const (
-	StatusPending   ExecutionStatus = "pending"
-	StatusRunning   ExecutionStatus = "running"
-	StatusCompleted ExecutionStatus = "completed"
-	StatusFailed    ExecutionStatus = "failed"
-	StatusCancelled ExecutionStatus = "cancelled"
-)
-
-// ProcessingRequest represents a request being processed through the system
-type ProcessingRequest struct {
-	ID              string               `json:"id"`
-	Input           RequestInput         `json:"input"`
-	Complexity      TaskComplexity       `json:"complexity"`
-	OptimizedPrompt OptimizedPrompt      `json:"optimized_prompt"`
-	Assignment      ProviderAssignment   `json:"assignment"`
-	Status          ExecutionStatus      `json:"status"`
-	Result          string               `json:"result"`
-	TotalCost       float64              `json:"total_cost"`
-	TotalDuration   time.Duration        `json:"total_duration"`
-	CreatedAt       time.Time            `json:"created_at"`
-	CompletedAt     *time.Time           `json:"completed_at,omitempty"`
-	Error           string               `json:"error,omitempty"`
-}
-
-// SystemMetrics represents overall system performance metrics
-type SystemMetrics struct {
-	TotalRequests        int64              `json:"total_requests"`
-	SuccessfulRequests   int64              `json:"successful_requests"`
-	FailedRequests       int64              `json:"failed_requests"`
-	AverageResponseTime  float64            `json:"average_response_time"`
-	TotalCost            float64            `json:"total_cost"`
-	CostSavings          float64            `json:"cost_savings"`
-	ActiveRequests       int                `json:"active_requests"`
-	ProviderHealthScores map[string]float64 `json:"provider_health_scores"`
-	LastUpdated          time.Time          `json:"last_updated"`
-}
-
 // EnhancedSystem represents the main enhanced Your PaL MoE system
 type EnhancedSystem struct {
 	logger *logrus.Logger
@@ -288,7 +248,7 @@ func (s *EnhancedSystem) GenerateProviderYAML(ctx context.Context, providerID st
 	providers := s.providerSelector.GetProviders()
 
 	for _, provider := range providers {
-		if provider.ID == providerID {
+		if provider.Name == providerID {
 			return s.yamlGenerator.GenerateYAMLFromProvider(ctx, provider)
 		}
 	}
@@ -314,7 +274,7 @@ func (s *EnhancedSystem) GetMetrics() *SystemMetrics {
 	// Update provider health scores
 	providers := s.providerSelector.GetProviders()
 	for _, provider := range providers {
-		s.metrics.ProviderHealthScores[provider.ID] = s.calculateHealthScore(provider)
+		s.metrics.ProviderHealthScores[provider.Name] = s.calculateHealthScore(provider)
 	}
 
 	return s.metrics
@@ -402,7 +362,7 @@ func (s *EnhancedSystem) collectMetrics() {
 	// Update provider health scores
 	providers := s.providerSelector.GetProviders()
 	for _, provider := range providers {
-		s.metrics.ProviderHealthScores[provider.ID] = s.calculateHealthScore(provider)
+		s.metrics.ProviderHealthScores[provider.Name] = s.calculateHealthScore(provider)
 	}
 }
 
@@ -411,12 +371,4 @@ func (s *EnhancedSystem) Shutdown() error {
 	s.logger.Info("Shutting down enhanced system...")
 	s.cancel()
 	return nil
-}
-
-// Helper function
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

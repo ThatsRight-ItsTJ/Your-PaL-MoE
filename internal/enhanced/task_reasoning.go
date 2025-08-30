@@ -9,36 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ComplexityLevel represents different levels of complexity
-type ComplexityLevel int
-
-const (
-	Low ComplexityLevel = iota
-	Medium
-	High
-	VeryHigh
-)
-
-// TaskComplexity represents the analyzed complexity of a task
-type TaskComplexity struct {
-	Reasoning    ComplexityLevel `json:"reasoning"`
-	Knowledge    ComplexityLevel `json:"knowledge"`
-	Computation  ComplexityLevel `json:"computation"`
-	Coordination ComplexityLevel `json:"coordination"`
-	Overall      ComplexityLevel `json:"overall"`
-	Score        float64         `json:"score"`
-}
-
-// RequestInput represents the initial user request
-type RequestInput struct {
-	ID          string                 `json:"id"`
-	Content     string                 `json:"content"`
-	Context     map[string]interface{} `json:"context,omitempty"`
-	Priority    int                    `json:"priority,omitempty"`
-	Constraints map[string]interface{} `json:"constraints,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
-}
-
 // TaskReasoningEngine analyzes task complexity and requirements
 type TaskReasoningEngine struct {
 	logger *logrus.Logger
@@ -114,7 +84,7 @@ func (t *TaskReasoningEngine) AnalyzeComplexity(ctx context.Context, input Reque
 		Score:        score,
 	}
 	
-	t.logger.Infof("Complexity analysis for %s: overall=%d, score=%.2f", input.ID, overall, score)
+	t.logger.Infof("Complexity analysis for %s: overall=%s, score=%.2f", input.ID, overall.String(), score)
 	return complexity, nil
 }
 
