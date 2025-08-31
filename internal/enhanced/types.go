@@ -120,16 +120,18 @@ const (
 	UnofficialTier ProviderTier = "unofficial"
 )
 
-// Provider represents an AI provider with simplified 6-column structure
+// Provider represents an AI provider with enhanced health metrics
 type Provider struct {
-	ID       string          `json:"id,omitempty"`
-	Name     string          `json:"name"`
-	Tier     ProviderTier    `json:"tier"`
-	BaseURL  string          `json:"base_url"`
-	APIKey   string          `json:"api_key"`
-	Models   string          `json:"models"`
-	Other    string          `json:"other"`
-	Metrics  ProviderMetrics `json:"metrics"`
+	ID            string                 `json:"id,omitempty"`
+	Name          string                 `json:"name"`
+	Tier          ProviderTier           `json:"tier"`
+	BaseURL       string                 `json:"base_url"`
+	APIKey        string                 `json:"api_key"`
+	Models        string                 `json:"models"`
+	Other         string                 `json:"other"`
+	Metrics       ProviderMetrics        `json:"metrics"`
+	HealthMetrics *ProviderHealthMetrics `json:"health_metrics,omitempty"`
+	Pricing       *ProviderPricing       `json:"pricing,omitempty"`
 }
 
 // ProviderMetrics tracks performance metrics for a provider
@@ -147,6 +149,14 @@ type ProviderMetrics struct {
 	ErrorCount        int64     `json:"error_count"`
 	LastUsed          time.Time `json:"last_used"`
 	LastUpdated       time.Time `json:"last_updated"`
+}
+
+// ProviderPricing represents pricing information for a provider
+type ProviderPricing struct {
+	InputTokenCost  float64 `json:"input_token_cost"`
+	OutputTokenCost float64 `json:"output_token_cost"`
+	Currency        string  `json:"currency"`
+	LastUpdated     time.Time `json:"last_updated"`
 }
 
 // SystemMetrics represents overall system performance metrics
