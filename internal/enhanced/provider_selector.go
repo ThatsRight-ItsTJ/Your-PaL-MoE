@@ -3,71 +3,14 @@ package enhanced
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
-
-// ProviderTier represents the tier of a provider
-type ProviderTier string
-
-const (
-	OfficialTier   ProviderTier = "official"
-	CommunityTier  ProviderTier = "community"
-	UnofficialTier ProviderTier = "unofficial"
-)
-
-// Provider represents an AI provider with simplified 6-column structure
-type Provider struct {
-	Name     string       `json:"name"`      // Column 1: Name
-	Tier     ProviderTier `json:"tier"`      // Column 2: Tier  
-	BaseURL  string       `json:"base_url"`  // Column 3: Base_URL
-	APIKey   string       `json:"api_key"`   // Column 4: APIKey
-	Models   string       `json:"models"`    // Column 5: Model(s) - can be endpoint or list
-	Other    string       `json:"other"`     // Column 6: Other info
-	Metrics  ProviderMetrics `json:"metrics"`
-}
-
-// ProviderMetrics tracks performance metrics for a provider
-type ProviderMetrics struct {
-	SuccessRate      float64   `json:"success_rate"`
-	AverageLatency   float64   `json:"average_latency"`
-	QualityScore     float64   `json:"quality_score"`
-	CostEfficiency   float64   `json:"cost_efficiency"`
-	LastUpdated      time.Time `json:"last_updated"`
-	RequestCount     int64     `json:"request_count"`
-	ErrorCount       int64     `json:"error_count"`
-	AverageCost      float64   `json:"average_cost"`
-	ReliabilityScore float64   `json:"reliability_score"`
-}
-
-// ProviderAssignment represents the assignment of tasks to providers
-type ProviderAssignment struct {
-	TaskID        string                 `json:"task_id"`
-	ProviderID    string                 `json:"provider_id"`
-	ProviderTier  ProviderTier           `json:"provider_tier"`
-	Confidence    float64                `json:"confidence"`
-	EstimatedCost float64                `json:"estimated_cost"`
-	EstimatedTime int                    `json:"estimated_time"`
-	Reasoning     string                 `json:"reasoning"`
-	Alternatives  []AlternativeProvider  `json:"alternatives,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// AlternativeProvider represents an alternative provider option
-type AlternativeProvider struct {
-	ProviderID    string  `json:"provider_id"`
-	Confidence    float64 `json:"confidence"`
-	EstimatedCost float64 `json:"estimated_cost"`
-	Reasoning     string  `json:"reasoning"`
-}
 
 // AdaptiveProviderSelector implements intelligent provider selection
 type AdaptiveProviderSelector struct {
@@ -88,17 +31,6 @@ type AdaptiveProviderSelector struct {
 	// Performance tracking
 	selectionHistory map[string][]SelectionRecord
 	historyMutex     sync.RWMutex
-}
-
-// SelectionRecord tracks provider selection decisions
-type SelectionRecord struct {
-	TaskComplexity   TaskComplexity `json:"task_complexity"`
-	SelectedProvider string         `json:"selected_provider"`
-	ActualCost       float64        `json:"actual_cost"`
-	ActualLatency    float64        `json:"actual_latency"`
-	QualityScore     float64        `json:"quality_score"`
-	Success          bool           `json:"success"`
-	Timestamp        time.Time      `json:"timestamp"`
 }
 
 // NewAdaptiveProviderSelector creates a new adaptive provider selector
@@ -220,7 +152,8 @@ func (a *AdaptiveProviderSelector) SelectOptimalProvider(ctx context.Context, ta
 	alternatives := make([]AlternativeProvider, 0, min(3, len(scores)-1))
 	for i := 1; i < min(4, len(scores)); i++ {
 		alternatives = append(alternatives, AlternativeProvider{
-			ProviderID:    bestProvider.Name, // Use Name as ID
+			ProviderID:    scores[i].Provider.Name, // Use Name as ID
+			ProviderName:  scores[i].Provider.Name,
 			Confidence:    scores[i].Score,
 			EstimatedCost: a.estimateTaskCost(scores[i].Provider, complexity),
 			Reasoning:     fmt.Sprintf("Alternative option with score %.2f", scores[i].Score),
@@ -230,10 +163,11 @@ func (a *AdaptiveProviderSelector) SelectOptimalProvider(ctx context.Context, ta
 	assignment := ProviderAssignment{
 		TaskID:        taskID,
 		ProviderID:    bestProvider.Name, // Use Name as ID
+		ProviderName:  bestProvider.Name,
 		ProviderTier:  bestProvider.Tier,
 		Confidence:    scores[0].Score,
 		EstimatedCost: a.estimateTaskCost(bestProvider, complexity),
-		EstimatedTime: a.estimateTaskTime(bestProvider, complexity),
+		EstimatedTime: int64(a.estimateTaskTime(bestProvider, complexity)),
 		Reasoning:     a.generateSelectionReasoning(bestProvider, complexity, scores[0].Score),
 		Alternatives:  alternatives,
 		Metadata:      make(map[string]interface{}),
@@ -243,6 +177,36 @@ func (a *AdaptiveProviderSelector) SelectOptimalProvider(ctx context.Context, ta
 		bestProvider.Name, taskID, scores[0].Score)
 	
 	return assignment, nil
+}
+
+// UpdateProviderMetrics updates provider performance metrics
+func (a *AdaptiveProviderSelector) UpdateProviderMetrics(ctx context.Context, providerID string, success bool, cost, latency, quality float64) {
+	a.providersMutex.Lock()
+	defer a.providersMutex.Unlock()
+	
+	for _, provider := range a.providers {
+		if provider.Name == providerID {
+			provider.Metrics.TotalRequests++
+			if success {
+				provider.Metrics.SuccessfulRequests++
+			} else {
+				provider.Metrics.FailedRequests++
+			}
+			
+			// Update running averages
+			if provider.Metrics.TotalRequests > 0 {
+				provider.Metrics.SuccessRate = float64(provider.Metrics.SuccessfulRequests) / float64(provider.Metrics.TotalRequests)
+			}
+			provider.Metrics.AverageLatency = (provider.Metrics.AverageLatency + latency) / 2
+			provider.Metrics.AverageCost = (provider.Metrics.AverageCost + cost) / 2
+			provider.Metrics.QualityScore = (provider.Metrics.QualityScore + quality) / 2
+			provider.Metrics.LastUpdated = time.Now()
+			
+			a.logger.Infof("Updated metrics for provider %s: success_rate=%.2f, avg_cost=%.6f", 
+				provider.Name, provider.Metrics.SuccessRate, provider.Metrics.AverageCost)
+			break
+		}
+	}
 }
 
 // ProviderScore represents a provider with its calculated score
@@ -372,12 +336,4 @@ func (a *AdaptiveProviderSelector) GetProviders() []*Provider {
 	providers := make([]*Provider, len(a.providers))
 	copy(providers, a.providers)
 	return providers
-}
-
-// Helper function
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

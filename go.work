@@ -5,3 +5,5 @@ use (
 	./mcp-servers
 	./openapi-mcp
 )
+
+use .
