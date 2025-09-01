@@ -85,7 +85,6 @@ func (s *SPOOptimizer) OptimizePrompt(ctx context.Context, originalPrompt string
 		return OptimizedPrompt{
 			Original:     originalPrompt,
 			Optimized:    cached.Optimized,
-			Iterations:   0,
 			Improvements: cached.Improvements,
 			Confidence:   cached.Score,
 			CostSavings:  s.estimateCostSavings(cached.Score),
@@ -106,7 +105,7 @@ func (s *SPOOptimizer) OptimizePrompt(ctx context.Context, originalPrompt string
 		Original:      originalPrompt,
 		Optimized:     result.Optimized,
 		Score:         result.Confidence,
-		Iteration:     result.Iterations,
+		Iteration:     s.maxIterations, // Use maxIterations instead of result.Iterations
 		Improvements:  result.Improvements,
 		ExecutionTime: time.Since(startTime),
 		Timestamp:     time.Now(),
@@ -167,7 +166,6 @@ func (s *SPOOptimizer) performOptimization(ctx context.Context, original string,
 	return OptimizedPrompt{
 		Original:     original,
 		Optimized:    bestPrompt,
-		Iterations:   s.maxIterations,
 		Improvements: improvements,
 		Confidence:   bestScore,
 		CostSavings:  s.estimateCostSavings(bestScore),
@@ -291,7 +289,7 @@ func (s *SPOOptimizer) calculatePromptQuality(prompt string, complexity TaskComp
 
 // Helper methods
 func (s *SPOOptimizer) identifyImprovement(original, optimized string) string {
-	if len(optimized) > len(original)*1.2 {
+	if len(optimized) > int(float64(len(original))*1.2) {
 		return "Added detailed guidance"
 	} else if strings.Contains(optimized, "\n") && !strings.Contains(original, "\n") {
 		return "Improved structure"

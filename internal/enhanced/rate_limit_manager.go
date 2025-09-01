@@ -1,7 +1,6 @@
 package enhanced
 
 import (
-	"fmt"
 	"strconv"
 	"sync"
 	"time"

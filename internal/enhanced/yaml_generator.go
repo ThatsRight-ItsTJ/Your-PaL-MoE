@@ -60,37 +60,22 @@ func (y *YAMLGenerator) buildPrompt(provider *Provider) string {
 	sb.WriteString(fmt.Sprintf("Provider ID: %s\n", provider.ID))
 	sb.WriteString(fmt.Sprintf("Provider Name: %s\n", provider.Name))
 	sb.WriteString(fmt.Sprintf("Tier: %s\n", provider.Tier))
-	sb.WriteString(fmt.Sprintf("Endpoint: %s\n", provider.Endpoint))
+	sb.WriteString(fmt.Sprintf("Base URL: %s\n", provider.BaseURL))
 	
-	// Handle multiple models
-	if len(provider.Models) > 0 {
-		if provider.ModelsSource == "list" {
-			sb.WriteString(fmt.Sprintf("Models: %s\n", strings.Join(provider.Models, ", ")))
-		} else {
-			sb.WriteString(fmt.Sprintf("Models Endpoint: %s\n", provider.ModelsSource))
-			if len(provider.Models) > 0 {
-				sb.WriteString(fmt.Sprintf("Available Models: %s\n", strings.Join(provider.Models, ", ")))
-			}
-		}
+	// Handle models field
+	if provider.Models != "" {
+		sb.WriteString(fmt.Sprintf("Models: %s\n", provider.Models))
 	}
 	
-	sb.WriteString(fmt.Sprintf("Cost Per Token: %.6f\n", provider.CostPerToken))
-	sb.WriteString(fmt.Sprintf("Max Tokens: %d\n", provider.MaxTokens))
-	
-	if len(provider.Capabilities) > 0 {
-		sb.WriteString(fmt.Sprintf("Capabilities: %s\n", strings.Join(provider.Capabilities, ", ")))
+	// Add pricing information if available
+	if provider.Pricing != nil {
+		sb.WriteString(fmt.Sprintf("Input Token Cost: %.6f\n", provider.Pricing.InputTokenCost))
+		sb.WriteString(fmt.Sprintf("Output Token Cost: %.6f\n", provider.Pricing.OutputTokenCost))
 	}
 	
-	// Add metadata/additional info
-	if additionalInfo, exists := provider.Metadata["additional_info"]; exists {
-		sb.WriteString(fmt.Sprintf("Additional Info: %s\n", additionalInfo))
-	}
-	
-	// Add rate limits and other metadata
-	for key, value := range provider.Metadata {
-		if key != "additional_info" {
-			sb.WriteString(fmt.Sprintf("%s: %v\n", strings.Title(strings.ReplaceAll(key, "_", " ")), value))
-		}
+	// Add other information
+	if provider.Other != "" {
+		sb.WriteString(fmt.Sprintf("Additional Info: %s\n", provider.Other))
 	}
 	
 	sb.WriteString("\nGenerate a complete YAML configuration file that includes:\n")

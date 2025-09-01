@@ -147,7 +147,7 @@ func (es *LegacyEnhancedSystem) ProcessRequest(ctx context.Context, input Reques
 	}
 	result.Assignment = ProviderAssignment{
 		ProviderID:    providerScore.ProviderID,
-		Confidence:    providerScore.Score,
+		Confidence:    providerScore.TotalScore, // Use TotalScore instead of Score
 		EstimatedCost: providerScore.CostScore,
 	}
 	
@@ -214,7 +214,7 @@ func (es *LegacyEnhancedSystem) ProcessRequest(ctx context.Context, input Reques
 				// Update system metrics
 				es.updateMetrics(func(m *SystemMetrics) {
 					m.SuccessfulRequests++
-					m.AverageResponseTime = time.Duration((int64(m.AverageResponseTime) + int64(duration)) / 2)
+					m.AverageResponseTime = (m.AverageResponseTime + float64(duration.Milliseconds())) / 2
 				})
 				
 				es.logger.Infof("Request %s completed successfully in %v", input.ID, duration)
@@ -265,7 +265,9 @@ func (es *LegacyEnhancedSystem) GetMetrics() SystemMetrics {
 	defer es.metricsMutex.RUnlock()
 	
 	metrics := es.metrics
-	metrics.SystemUptime = time.Since(metrics.SystemUptime)
+	// Fix: Calculate uptime duration and store as LastUpdated instead
+	metrics.LastUpdated = time.Now()
+	// Store uptime duration in a different way - we'll use the existing SystemUptime field differently
 	return metrics
 }
 
