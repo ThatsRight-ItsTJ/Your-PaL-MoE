@@ -47,16 +47,23 @@ func main() {
 	router.HandleFunc("/api/v1/providers/yaml/generate-all", server.generateAllYAMLsHandler).Methods("POST")
 	router.HandleFunc("/api/v1/metrics", server.getMetricsHandler).Methods("GET")
 
+	// Get port from environment variable, default to 8080
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
+
 	// Start server
 	srv := &http.Server{
-		Addr:         ":8080",
+		Addr:         addr,
 		Handler:      router,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
 
 	go func() {
-		logger.Info("Starting Enhanced Your PaL MoE server on :8080")
+		logger.Infof("Starting Enhanced Your PaL MoE server on %s", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatalf("Server failed to start: %v", err)
 		}
