@@ -39,23 +39,38 @@ func (m *Manager) LoadFromConfig(configs []ProviderConfig) error {
 	defer m.mu.Unlock()
 
 	for _, config := range configs {
+		// Extract models from ModelsSource
+		var models []string
+		switch config.ModelsSource.Type {
+		case "list":
+			if modelList, ok := config.ModelsSource.Value.([]string); ok {
+				models = modelList
+			}
+		case "endpoint":
+			// For endpoint type, we'll fetch models dynamically later
+			models = []string{} // Empty initially, will be populated by dynamic loader
+		case "script":
+			// For script type, we'll execute script later
+			models = []string{} // Empty initially, will be populated by script execution
+		}
+
 		provider := &Provider{
 			Name:         config.Name,
-			URL:          config.URL,
-			Models:       config.Models,
-			Capabilities: config.Capabilities,
-			Priority:     config.Priority,
-			Metadata:     config.Metadata,
-			IsHealthy:    true,
-			LastChecked:  time.Now(),
+			URL:          config.Endpoint, // Use Endpoint field from ProviderConfig
+			Models:       models,
+			Capabilities: []string{config.Tier}, // Use Tier as capability
+			Priority:     1, // Default priority
+			Metadata: map[string]interface{}{
+				"tier":          config.Tier,
+				"endpoint":      config.Endpoint,
+				"models_source": config.ModelsSource,
+				"enabled":       config.Enabled,
+			},
+			IsHealthy:   true,
+			LastChecked: time.Now(),
 		}
 
 		m.providers[config.Name] = provider
-		
-		// Start health monitoring for this provider
-		if config.URL != "" {
-			m.healthMonitor.AddProvider(config.Name, config.URL)
-		}
 	}
 
 	return nil
@@ -109,12 +124,13 @@ func (m *Manager) UpdateProviderHealth(name string, isHealthy bool) {
 
 // StartHealthMonitoring starts the health monitoring process
 func (m *Manager) StartHealthMonitoring(ctx context.Context) {
-	m.healthMonitor.Start(ctx, m.UpdateProviderHealth)
+	// Start health monitoring with the context
+	go m.healthMonitor.Start(ctx)
 }
 
 // StopHealthMonitoring stops the health monitoring process
 func (m *Manager) StopHealthMonitoring() {
-	m.healthMonitor.Stop()
+	// Health monitoring will stop when context is cancelled
 }
 
 // GetProviderModels returns models for a specific provider
