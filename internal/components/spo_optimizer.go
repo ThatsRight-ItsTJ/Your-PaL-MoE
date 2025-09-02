@@ -3,20 +3,19 @@ package components
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/enhanced"
 )
 
-// SPOOptimizer implements Self-Prompt Optimization
+// SPOOptimizer represents a self-prompt optimizer
 type SPOOptimizer struct {
-	templates          map[string]string
-	optimizationRules  map[enhanced.ComplexityLevel][]string
-	cache             map[string]CachedOptimization
-	maxCacheSize      int
-	cacheHitRate      float64
+	templates         map[string]string
+	optimizationRules map[enhanced.ComplexityLevel][]string
+	cache            map[string]CachedOptimization
+	maxCacheSize     int
+	cacheHitRate     float64
 	totalOptimizations int64
 }
 
@@ -28,251 +27,135 @@ type CachedOptimization struct {
 	HitCount        int
 }
 
-// OptimizedPrompt represents an optimized prompt with metadata
-type OptimizedPrompt struct {
-	OriginalPrompt   string                 `json:"original_prompt"`
-	OptimizedPrompt  string                 `json:"optimized_prompt"`
-	Complexity       enhanced.ComplexityLevel `json:"complexity"`
-	OptimizationRules []string              `json:"optimization_rules"`
-	Metadata         map[string]interface{} `json:"metadata"`
-	ProcessingTime   time.Duration          `json:"processing_time"`
-}
-
-// Config represents configuration for the SPO optimizer
-type Config struct {
-	MaxCacheSize      int                                                `json:"max_cache_size"`
-	OptimizationRules map[enhanced.ComplexityLevel][]string             `json:"optimization_rules"`
-	Templates         map[string]string                                  `json:"templates"`
-}
-
-// NewSPOOptimizer creates a new SPO optimizer with default configuration
-func NewSPOOptimizer(cfg *Config) *SPOOptimizer {
-	if cfg == nil {
-		cfg = &Config{
-			MaxCacheSize: 1000,
-			OptimizationRules: map[enhanced.ComplexityLevel][]string{
-				enhanced.Low:      {"Keep responses concise", "Use simple language"},
-				enhanced.Medium:   {"Provide context", "Use examples"},
-				enhanced.High:     {"Break down problems", "Provide detailed reasoning"},
-				enhanced.VeryHigh: {"Use systematic analysis", "Employ chain-of-thought"},
-			},
-			Templates: make(map[string]string),
-		}
-	}
-
+// NewSPOOptimizer creates a new SPO optimizer
+func NewSPOOptimizer() *SPOOptimizer {
 	return &SPOOptimizer{
-		templates:         cfg.Templates,
-		optimizationRules: cfg.OptimizationRules,
-		cache:            make(map[string]CachedOptimization),
-		maxCacheSize:     cfg.MaxCacheSize,
-		cacheHitRate:     0.0,
+		templates: map[string]string{
+			"reasoning": "Please analyze the following problem step by step: {prompt}",
+			"creative":  "Generate creative and original content for: {prompt}",
+			"factual":   "Provide accurate and factual information about: {prompt}",
+			"mathematical": "Solve the following mathematical problem: {prompt}",
+		},
+		optimizationRules: map[enhanced.ComplexityLevel][]string{
+			enhanced.Low:      {"simplify", "clarify"},
+			enhanced.Medium:   {"structure", "examples", "context"},
+			enhanced.High:     {"breakdown", "methodology", "constraints"},
+			enhanced.VeryHigh: {"systematic", "comprehensive", "multi-step"},
+		},
+		cache:        make(map[string]CachedOptimization),
+		maxCacheSize: 1000,
 	}
 }
 
-// OptimizePrompt optimizes a prompt based on task complexity
-func (spo *SPOOptimizer) OptimizePrompt(ctx context.Context, prompt string, complexity enhanced.TaskComplexity) (*OptimizedPrompt, error) {
-	startTime := time.Now()
-	spo.totalOptimizations++
+// OptimizePrompt optimizes a prompt based on complexity
+func (spo *SPOOptimizer) OptimizePrompt(prompt string, complexity enhanced.TaskComplexity) (string, error) {
+	if strings.TrimSpace(prompt) == "" {
+		return "", fmt.Errorf("prompt cannot be empty")
+	}
 
 	// Check cache first
 	cacheKey := fmt.Sprintf("%s_%s", prompt, complexity.Overall.String())
 	if cached, exists := spo.cache[cacheKey]; exists {
 		cached.HitCount++
 		spo.cache[cacheKey] = cached
-		spo.updateCacheHitRate(true)
-		
-		return &OptimizedPrompt{
-			OriginalPrompt:   prompt,
-			OptimizedPrompt:  cached.OptimizedPrompt,
-			Complexity:       complexity.Overall,
-			OptimizationRules: spo.optimizationRules[complexity.Overall],
-			Metadata:         map[string]interface{}{"cache_hit": true},
-			ProcessingTime:   time.Since(startTime),
-		}, nil
+		return cached.OptimizedPrompt, nil
 	}
-
-	spo.updateCacheHitRate(false)
 
 	// Apply optimization rules based on complexity
-	optimized := spo.applyOptimizationRules(prompt, complexity.Overall)
-	
-	// Apply specific optimizations based on task type
-	optimized = spo.applyTaskSpecificOptimizations(optimized, complexity)
-	
+	optimizedPrompt := spo.applyOptimizationRules(prompt, complexity)
+
 	// Cache the result
-	spo.cacheOptimization(cacheKey, optimized, complexity.Overall)
-
-	result := &OptimizedPrompt{
-		OriginalPrompt:   prompt,
-		OptimizedPrompt:  optimized,
-		Complexity:       complexity.Overall,
-		OptimizationRules: spo.optimizationRules[complexity.Overall],
-		Metadata:         map[string]interface{}{"cache_hit": false},
-		ProcessingTime:   time.Since(startTime),
-	}
-
-	return result, nil
-}
-
-// OptimizePromptBatch optimizes multiple prompts in batch
-func (spo *SPOOptimizer) OptimizePromptBatch(ctx context.Context, prompts []string, complexity enhanced.TaskComplexity) ([]*OptimizedPrompt, error) {
-	results := make([]*OptimizedPrompt, len(prompts))
-	
-	for i, prompt := range prompts {
-		optimized, err := spo.OptimizePrompt(ctx, prompt, complexity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to optimize prompt %d: %w", i, err)
+	if len(spo.cache) < spo.maxCacheSize {
+		spo.cache[cacheKey] = CachedOptimization{
+			OptimizedPrompt: optimizedPrompt,
+			Complexity:      complexity.Overall,
+			Timestamp:       time.Now(),
+			HitCount:        1,
 		}
-		results[i] = optimized
 	}
-	
-	return results, nil
+
+	spo.totalOptimizations++
+	return optimizedPrompt, nil
 }
 
-// GetOptimizationTemplate returns an optimization template for a given complexity
-func (spo *SPOOptimizer) GetOptimizationTemplate(complexity enhanced.TaskComplexity) string {
-	switch complexity.Overall {
-	case enhanced.Low:
-		return "Please provide a clear and concise response to: %s"
-	case enhanced.Medium:
-		return "Please analyze and provide a detailed response with examples for: %s"
-	case enhanced.High:
-		return "Please break down this complex problem step by step and provide detailed reasoning: %s"
-	case enhanced.VeryHigh:
-		return "Please use systematic analysis and chain-of-thought reasoning to thoroughly address: %s"
+// applyOptimizationRules applies optimization rules based on complexity
+func (spo *SPOOptimizer) applyOptimizationRules(prompt string, complexity enhanced.TaskComplexity) string {
+	optimized := prompt
+
+	// Get rules for the complexity level
+	if rules, exists := spo.optimizationRules[complexity.Overall]; exists {
+		for _, rule := range rules {
+			optimized = spo.applyRule(optimized, rule, complexity)
+		}
+	}
+
+	return optimized
+}
+
+// applyRule applies a specific optimization rule
+func (spo *SPOOptimizer) applyRule(prompt string, rule string, complexity enhanced.TaskComplexity) string {
+	switch rule {
+	case "simplify":
+		return fmt.Sprintf("Please provide a simple and clear answer to: %s", prompt)
+	case "clarify":
+		return fmt.Sprintf("Please clarify and explain: %s", prompt)
+	case "structure":
+		return fmt.Sprintf("Please provide a structured response to: %s\n\nPlease organize your answer with clear sections.", prompt)
+	case "examples":
+		return fmt.Sprintf("%s\n\nPlease include relevant examples in your response.", prompt)
+	case "context":
+		return fmt.Sprintf("Considering the context and background, please address: %s", prompt)
+	case "breakdown":
+		return fmt.Sprintf("Please break down the following into manageable parts: %s\n\nProvide a step-by-step analysis.", prompt)
+	case "methodology":
+		return fmt.Sprintf("%s\n\nPlease explain your methodology and reasoning process.", prompt)
+	case "constraints":
+		return fmt.Sprintf("Considering all constraints and limitations, please address: %s", prompt)
+	case "systematic":
+		return fmt.Sprintf("Please provide a systematic and comprehensive analysis of: %s\n\nUse a structured approach with clear reasoning.", prompt)
+	case "comprehensive":
+		return fmt.Sprintf("%s\n\nPlease provide a comprehensive response covering all relevant aspects.", prompt)
+	case "multi-step":
+		return fmt.Sprintf("Please solve the following using a multi-step approach: %s\n\n1. First, analyze the problem\n2. Then, develop a solution strategy\n3. Finally, implement and verify the solution", prompt)
 	default:
-		return "Please respond to: %s"
-	}
-}
-
-// applyOptimizationRules applies complexity-specific optimization rules
-func (spo *SPOOptimizer) applyOptimizationRules(prompt string, complexity enhanced.ComplexityLevel) string {
-	rules, exists := spo.optimizationRules[complexity]
-	if !exists {
 		return prompt
 	}
+}
 
-	optimized := prompt
-	
-	// Apply each rule
-	for _, rule := range rules {
-		switch rule {
-		case "Keep responses concise":
-			optimized = "Be concise. " + optimized
-		case "Use simple language":
-			optimized = "Use simple, clear language. " + optimized
-		case "Provide context":
-			optimized = "Provide relevant context and background. " + optimized
-		case "Use examples":
-			optimized = optimized + " Include relevant examples."
-		case "Break down problems":
-			optimized = "Break this down step by step. " + optimized
-		case "Provide detailed reasoning":
-			optimized = optimized + " Show your reasoning process."
-		case "Use systematic analysis":
-			optimized = "Use systematic analysis. " + optimized
-		case "Employ chain-of-thought":
-			optimized = "Think through this step by step using chain-of-thought reasoning. " + optimized
+// GetOptimizationStats returns optimization statistics
+func (spo *SPOOptimizer) GetOptimizationStats() map[string]interface{} {
+	cacheHits := 0
+	for _, cached := range spo.cache {
+		if cached.HitCount > 1 {
+			cacheHits += cached.HitCount - 1
 		}
 	}
-	
-	return optimized
-}
 
-// applyTaskSpecificOptimizations applies optimizations based on specific task aspects
-func (spo *SPOOptimizer) applyTaskSpecificOptimizations(prompt string, complexity enhanced.TaskComplexity) string {
-	optimized := prompt
-	
-	// Mathematical tasks
-	if complexity.Mathematical >= enhanced.Medium {
-		optimized = "For mathematical problems, show all work and calculations. " + optimized
+	hitRate := 0.0
+	if spo.totalOptimizations > 0 {
+		hitRate = float64(cacheHits) / float64(spo.totalOptimizations)
 	}
-	
-	// Creative tasks
-	if complexity.Creative >= enhanced.Medium {
-		optimized = optimized + " Be creative and think outside the box."
-	}
-	
-	// Reasoning tasks
-	if complexity.Reasoning >= enhanced.High {
-		optimized = "Use logical reasoning and provide clear justification for your conclusions. " + optimized
-	}
-	
-	return optimized
-}
 
-// cacheOptimization stores an optimization result in cache
-func (spo *SPOOptimizer) cacheOptimization(key, optimized string, complexity enhanced.ComplexityLevel) {
-	// Remove oldest entries if cache is full
-	if len(spo.cache) >= spo.maxCacheSize {
-		spo.evictOldestCacheEntry()
-	}
-	
-	spo.cache[key] = CachedOptimization{
-		OptimizedPrompt: optimized,
-		Complexity:      complexity,
-		Timestamp:       time.Now(),
-		HitCount:        0,
-	}
-}
-
-// evictOldestCacheEntry removes the oldest cache entry
-func (spo *SPOOptimizer) evictOldestCacheEntry() {
-	var oldestKey string
-	var oldestTime time.Time = time.Now()
-	
-	for key, cached := range spo.cache {
-		if cached.Timestamp.Before(oldestTime) {
-			oldestTime = cached.Timestamp
-			oldestKey = key
-		}
-	}
-	
-	if oldestKey != "" {
-		delete(spo.cache, oldestKey)
-	}
-}
-
-// updateCacheHitRate updates the cache hit rate statistics
-func (spo *SPOOptimizer) updateCacheHitRate(hit bool) {
-	if spo.totalOptimizations == 0 {
-		return
-	}
-	
-	hits := int64(spo.cacheHitRate * float64(spo.totalOptimizations-1))
-	if hit {
-		hits++
-	}
-	
-	spo.cacheHitRate = float64(hits) / float64(spo.totalOptimizations)
-}
-
-// GetStats returns optimization statistics
-func (spo *SPOOptimizer) GetStats() map[string]interface{} {
 	return map[string]interface{}{
 		"total_optimizations": spo.totalOptimizations,
-		"cache_hit_rate":      spo.cacheHitRate,
-		"cache_size":          len(spo.cache),
-		"max_cache_size":      spo.maxCacheSize,
+		"cache_size":         len(spo.cache),
+		"cache_hit_rate":     hitRate,
+		"max_cache_size":     spo.maxCacheSize,
 	}
 }
 
 // ClearCache clears the optimization cache
 func (spo *SPOOptimizer) ClearCache() {
 	spo.cache = make(map[string]CachedOptimization)
-	spo.cacheHitRate = 0.0
-	log.Println("SPO optimizer cache cleared")
 }
 
-// ValidatePrompt validates that a prompt meets basic requirements
-func (spo *SPOOptimizer) ValidatePrompt(prompt string) error {
-	if strings.TrimSpace(prompt) == "" {
-		return fmt.Errorf("prompt cannot be empty")
-	}
+// SetMaxCacheSize sets the maximum cache size
+func (spo *SPOOptimizer) SetMaxCacheSize(size int) {
+	spo.maxCacheSize = size
 	
-	if len(prompt) > 10000 {
-		return fmt.Errorf("prompt too long (max 10000 characters)")
+	// Trim cache if necessary
+	if len(spo.cache) > size {
+		// Simple implementation: clear all cache when over limit
+		spo.ClearCache()
 	}
-	
-	return nil
 }

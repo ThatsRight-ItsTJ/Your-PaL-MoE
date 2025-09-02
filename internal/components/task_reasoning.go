@@ -2,29 +2,27 @@ package components
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/enhanced"
 )
 
 // TaskReasoner analyzes task complexity and requirements
 type TaskReasoner struct {
-	config *Config
+	config *TaskReasonerConfig
 }
 
-// Config represents configuration for the task reasoner
-type Config struct {
-	ComplexityWeights map[string]float64 `json:"complexity_weights"`
+// TaskReasonerConfig represents configuration for the task reasoner
+type TaskReasonerConfig struct {
+	ComplexityWeights map[string]float64                   `json:"complexity_weights"`
 	TokenMultipliers  map[enhanced.ComplexityLevel]float64 `json:"token_multipliers"`
 }
 
 // NewTaskReasoner creates a new task reasoner with default configuration
-func NewTaskReasoner(cfg *Config) *TaskReasoner {
-	if cfg == nil {
-		cfg = &Config{
+func NewTaskReasoner() *TaskReasoner {
+	return &TaskReasoner{
+		config: &TaskReasonerConfig{
 			ComplexityWeights: map[string]float64{
 				"reasoning":    0.3,
 				"mathematical": 0.25,
@@ -37,16 +35,12 @@ func NewTaskReasoner(cfg *Config) *TaskReasoner {
 				enhanced.High:     1.5,
 				enhanced.VeryHigh: 2.0,
 			},
-		}
-	}
-
-	return &TaskReasoner{
-		config: cfg,
+		},
 	}
 }
 
 // AnalyzeComplexity analyzes the complexity of a task
-func (tr *TaskReasoner) AnalyzeComplexity(ctx context.Context, content string, taskType string) (*enhanced.TaskComplexity, error) {
+func (tr *TaskReasoner) AnalyzeComplexity(content string) (*enhanced.TaskComplexity, error) {
 	if strings.TrimSpace(content) == "" {
 		return nil, fmt.Errorf("content cannot be empty")
 	}
@@ -256,42 +250,4 @@ func (tr *TaskReasoner) determineRequiredCapabilities(reasoning, mathematical, c
 	}
 	
 	return capabilities
-}
-
-// AnalyzeTaskRequirements analyzes specific task requirements
-func (tr *TaskReasoner) AnalyzeTaskRequirements(ctx context.Context, input enhanced.RequestInput) (map[string]interface{}, error) {
-	requirements := make(map[string]interface{})
-	
-	// Analyze content complexity
-	complexity, err := tr.AnalyzeComplexity(ctx, input.Content, string(input.TaskType))
-	if err != nil {
-		return nil, fmt.Errorf("failed to analyze complexity: %w", err)
-	}
-	
-	requirements["complexity"] = complexity
-	requirements["estimated_tokens"] = complexity.TokenEstimate
-	requirements["required_capabilities"] = complexity.RequiredCapabilities
-	
-	// Add task-specific requirements
-	if input.MaxTokens > 0 {
-		requirements["max_tokens"] = input.MaxTokens
-	}
-	if input.Temperature > 0 {
-		requirements["temperature"] = input.Temperature
-	}
-	
-	return requirements, nil
-}
-
-// ValidateTaskInput validates task input
-func (tr *TaskReasoner) ValidateTaskInput(input enhanced.RequestInput) error {
-	if strings.TrimSpace(input.Content) == "" {
-		return fmt.Errorf("task content cannot be empty")
-	}
-	
-	if len(input.Content) > 50000 {
-		return fmt.Errorf("task content too long (max 50000 characters)")
-	}
-	
-	return nil
 }
