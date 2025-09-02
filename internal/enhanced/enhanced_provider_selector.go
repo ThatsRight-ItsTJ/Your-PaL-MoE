@@ -4,419 +4,364 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	"os"
+	"io"
+	"log"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
-// EnhancedProviderSelector implements cost-optimized provider selection with rate limit management
+// EnhancedProviderSelector provides advanced provider selection with capability filtering
 type EnhancedProviderSelector struct {
-	logger *logrus.Logger
-	
-	// Provider management
-	providers      []*Provider
-	providersMutex sync.RWMutex
-	providersFile  string
-	
-	// Cost-based selection components
-	costBasedSelector *CostBasedSelector
-	rateLimitManager  *RateLimitManager
-	metricsStorage    *MetricsStorage
+	providers         []*Provider
+	capabilityFilters map[string][]string
 	healthCalculator  *HealthScoreCalculator
-	
-	// Selection configuration
-	costWeight        float64
-	performanceWeight float64
-	latencyWeight     float64
-	reliabilityWeight float64
-	adaptationRate    float64
-	
-	// Performance tracking
-	selectionHistory map[string][]SelectionRecord
-	historyMutex     sync.RWMutex
+	costOptimizer     *CostBasedSelector
 }
 
-// SelectionRecord tracks provider selection decisions with cost focus
-type SelectionRecord struct {
-	TaskComplexity   TaskComplexity `json:"task_complexity"`
-	SelectedProvider string         `json:"selected_provider"`
-	ActualCost       float64        `json:"actual_cost"`
-	ActualLatency    float64        `json:"actual_latency"`
-	QualityScore     float64        `json:"quality_score"`
-	Success          bool           `json:"success"`
-	CostSavings      float64        `json:"cost_savings"`
-	Timestamp        time.Time      `json:"timestamp"`
+// NewEnhancedProviderSelector creates a new enhanced provider selector
+func NewEnhancedProviderSelector(providers []*Provider) *EnhancedProviderSelector {
+	return &EnhancedProviderSelector{
+		providers: providers,
+		capabilityFilters: map[string][]string{
+			"reasoning":    {"gpt-4", "claude-3", "gemini-pro"},
+			"mathematical": {"gpt-4", "claude-3", "codex"},
+			"creative":     {"gpt-4", "claude-3", "dall-e"},
+			"factual":      {"gpt-3.5", "claude-instant", "gemini"},
+		},
+		healthCalculator: NewHealthScoreCalculator(),
+		costOptimizer:    NewCostBasedSelector(nil, nil),
+	}
 }
 
-// NewEnhancedProviderSelector creates a new cost-optimized provider selector
-func NewEnhancedProviderSelector(logger *logrus.Logger, providersFile string) (*EnhancedProviderSelector, error) {
-	// Initialize metrics storage
-	metricsStorage, err := NewMetricsStorage("./metrics.db")
+// LoadProvidersFromCSV loads providers from a CSV file
+func (eps *EnhancedProviderSelector) LoadProvidersFromCSV(reader io.Reader) ([]*Provider, error) {
+	csvReader := csv.NewReader(reader)
+	records, err := csvReader.ReadAll()
 	if err != nil {
-		logger.Warnf("Failed to initialize metrics storage: %v", err)
-		metricsStorage = nil // Continue without persistent storage
+		return nil, fmt.Errorf("failed to read CSV: %w", err)
 	}
-	
-	// Initialize rate limit manager
-	rateLimitManager := NewRateLimitManager(metricsStorage)
-	
-	// Initialize cost-based selector
-	costBasedSelector := NewCostBasedSelector(metricsStorage, rateLimitManager)
-	
-	selector := &EnhancedProviderSelector{
-		logger:            logger,
-		providersFile:     providersFile,
-		metricsStorage:    metricsStorage,
-		rateLimitManager:  rateLimitManager,
-		costBasedSelector: costBasedSelector,
-		healthCalculator:  NewHealthScoreCalculator(),
-		costWeight:        0.4,  // Increased for cost focus
-		performanceWeight: 0.25, // Reduced
-		latencyWeight:     0.2,  // Reduced
-		reliabilityWeight: 0.15, // Slightly reduced
-		adaptationRate:    0.05,
-		selectionHistory:  make(map[string][]SelectionRecord),
-	}
-	
-	// Load providers from CSV file
-	if err := selector.loadProviders(); err != nil {
-		return nil, fmt.Errorf("failed to load providers: %w", err)
-	}
-	
-	return selector, nil
-}
 
-// loadProviders loads providers from CSV file with enhanced health metrics
-func (e *EnhancedProviderSelector) loadProviders() error {
-	file, err := os.Open(e.providersFile)
-	if err != nil {
-		return fmt.Errorf("failed to open providers file: %w", err)
-	}
-	defer file.Close()
-	
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		return fmt.Errorf("failed to read CSV: %w", err)
-	}
-	
-	if len(records) == 0 {
-		return fmt.Errorf("empty providers file")
-	}
-	
-	// Skip header row
-	for i := 1; i < len(records); i++ {
-		provider, err := e.parseProviderRecord(records[i])
-		if err != nil {
-			e.logger.Warnf("Failed to parse provider record %d: %v", i, err)
+	var providers []*Provider
+	for i, record := range records {
+		if i == 0 { // Skip header
 			continue
 		}
-		e.providers = append(e.providers, provider)
+
+		if len(record) < 6 {
+			log.Printf("Skipping invalid record at line %d: insufficient fields", i+1)
+			continue
+		}
+
+		// Parse max tokens
+		maxTokens, err := strconv.ParseInt(strings.TrimSpace(record[3]), 10, 64)
+		if err != nil {
+			log.Printf("Invalid max_tokens at line %d: %v", i+1, err)
+			maxTokens = 4096 // Default value
+		}
+
+		// Parse cost per token
+		costPerToken, err := strconv.ParseFloat(strings.TrimSpace(record[5]), 64)
+		if err != nil {
+			log.Printf("Invalid cost_per_token at line %d: %v", i+1, err)
+			costPerToken = 0.00003 // Default value
+		}
+
+		// Parse tier
+		tierStr := strings.ToLower(strings.TrimSpace(record[1]))
+		var tier ProviderTier
+		switch tierStr {
+		case "official":
+			tier = OfficialTier
+		case "community":
+			tier = CommunityTier
+		case "unofficial":
+			tier = UnofficialTier
+		default:
+			tier = CommunityTier // Default
+		}
+
+		// Parse models (comma-separated)
+		modelsStr := strings.TrimSpace(record[4])
+		var models []string
+		if modelsStr != "" {
+			models = strings.Split(modelsStr, ",")
+			for j := range models {
+				models[j] = strings.TrimSpace(models[j])
+			}
+		}
+
+		provider := &Provider{
+			Name:         strings.TrimSpace(record[0]),
+			BaseURL:      strings.TrimSpace(record[2]),
+			Models:       models,
+			Tier:         tier,
+			MaxTokens:    maxTokens,
+			CostPerToken: costPerToken,
+			Capabilities: []string{"reasoning", "creative", "factual"}, // Default capabilities
+			RateLimits:   map[string]int64{"requests_per_minute": 60},
+			Metadata:     make(map[string]interface{}),
+			LastUpdated:  time.Now(),
+		}
+
+		providers = append(providers, provider)
 	}
-	
-	e.logger.Infof("Loaded %d providers from %s with cost optimization enabled", len(e.providers), e.providersFile)
-	return nil
+
+	return providers, nil
 }
 
-// parseProviderRecord parses a 6-column CSV record into a Provider struct with enhanced metrics
-func (e *EnhancedProviderSelector) parseProviderRecord(record []string) (*Provider, error) {
-	if len(record) < 6 {
-		return nil, fmt.Errorf("insufficient columns: expected 6 columns (Name,Tier,Base_URL,APIKey,Models,Other), got %d", len(record))
+// SelectProviderWithCapabilities selects a provider based on task complexity and required capabilities
+func (eps *EnhancedProviderSelector) SelectProviderWithCapabilities(ctx context.Context, complexity TaskComplexity, requiredCapabilities []string) (*ProviderAssignment, error) {
+	if len(eps.providers) == 0 {
+		return nil, fmt.Errorf("no providers available")
 	}
-	
-	provider := &Provider{
-		Name:    strings.TrimSpace(record[0]), // Column 1: Name
-		Tier:    ProviderTier(strings.ToLower(strings.TrimSpace(record[1]))), // Column 2: Tier
-		BaseURL: strings.TrimSpace(record[2]), // Column 3: Base_URL
-		APIKey:  strings.TrimSpace(record[3]), // Column 4: APIKey  
-		Models:  strings.TrimSpace(record[4]), // Column 5: Model(s)
-		Other:   strings.TrimSpace(record[5]), // Column 6: Other
-		Metrics: ProviderMetrics{
-			SuccessRate:      0.9, // Default values
-			AverageLatency:   1000.0,
-			QualityScore:     0.8,
-			CostEfficiency:   0.7,
-			LastUpdated:      time.Now(),
-			RequestCount:     0,
-			ErrorCount:       0,
-			AverageCost:      0.001, // Default cost
-			ReliabilityScore: 0.8,
-		},
-		HealthMetrics: &ProviderHealthMetrics{
-			UsageHistory:         make(map[string][]UsageRecord),
-			LastHealthCheck:      time.Now(),
-			HealthScore:          0.8,
-			CostEfficiencyScore:  0.7,
-			RateLimitStatus:      nil,
-		},
-		Pricing: e.getDefaultPricing(ProviderTier(strings.ToLower(strings.TrimSpace(record[1])))),
-	}
-	
-	return provider, nil
-}
 
-// getDefaultPricing returns default pricing based on provider tier
-func (e *EnhancedProviderSelector) getDefaultPricing(tier ProviderTier) *ProviderPricing {
-	switch tier {
-	case OfficialTier:
-		return &ProviderPricing{
-			InputTokenCost:  0.00003, // $0.03 per 1K tokens
-			OutputTokenCost: 0.00006, // $0.06 per 1K tokens
-			Currency:        "USD",
-			LastUpdated:     time.Now(),
-		}
-	case CommunityTier:
-		return &ProviderPricing{
-			InputTokenCost:  0.00001, // $0.01 per 1K tokens
-			OutputTokenCost: 0.00002, // $0.02 per 1K tokens
-			Currency:        "USD",
-			LastUpdated:     time.Now(),
-		}
-	case UnofficialTier:
-		return &ProviderPricing{
-			InputTokenCost:  0.0, // Often free
-			OutputTokenCost: 0.0,
-			Currency:        "USD",
-			LastUpdated:     time.Now(),
-		}
-	default:
-		return &ProviderPricing{
-			InputTokenCost:  0.00002, // $0.02 per 1K tokens default
-			OutputTokenCost: 0.00004, // $0.04 per 1K tokens default
-			Currency:        "USD",
-			LastUpdated:     time.Now(),
-		}
+	// Filter providers by capabilities
+	compatibleProviders := eps.filterProvidersByCapabilities(requiredCapabilities)
+	if len(compatibleProviders) == 0 {
+		// Fallback to all providers if no exact matches
+		compatibleProviders = eps.providers
 	}
-}
 
-// SelectOptimalProvider selects the optimal provider using cost-based optimization
-func (e *EnhancedProviderSelector) SelectOptimalProvider(ctx context.Context, taskID string, complexity TaskComplexity, requirements map[string]interface{}) (ProviderAssignment, error) {
-	e.logger.Infof("Selecting cost-optimal provider for task %s (complexity: %.2f)", taskID, complexity.Score)
-	
-	e.providersMutex.RLock()
-	defer e.providersMutex.RUnlock()
-	
-	if len(e.providers) == 0 {
-		return ProviderAssignment{}, fmt.Errorf("no providers available")
+	// Score providers
+	var scores []ProviderScore
+	for _, provider := range compatibleProviders {
+		score := eps.scoreProviderForComplexity(provider, complexity)
+		scores = append(scores, score)
 	}
+
+	// Sort by score (highest first)
+	scores = sortProvidersByScore(scores)
+
+	// Select best provider
+	bestScore := scores[0]
 	
-	// Extract model from requirements if available
-	model := "default"
-	if modelReq, exists := requirements["model"]; exists {
-		if modelStr, ok := modelReq.(string); ok {
-			model = modelStr
-		}
+	assignment := &ProviderAssignment{
+		Provider:        bestScore.Provider,
+		Model:          eps.selectBestModel(bestScore.Provider, complexity),
+		Confidence:     bestScore.Confidence,
+		EstimatedCost:  float64(complexity.TokenEstimate) * bestScore.Provider.CostPerToken,
+		EstimatedTokens: complexity.TokenEstimate,
+		Reasoning:      bestScore.Reasoning,
+		Alternatives:   []*Provider{}, // Could populate with other high-scoring providers
+		Metadata:       make(map[string]interface{}),
 	}
-	
-	// Estimate tokens based on complexity
-	estimatedTokens := e.estimateTokensFromComplexity(complexity)
-	
-	// Use cost-based selector for optimal provider selection
-	selectedProvider, err := e.costBasedSelector.SelectOptimalProvider(
-		e.providers,
-		model,
-		estimatedTokens,
-		complexity,
-	)
-	
-	if err != nil {
-		return ProviderAssignment{}, fmt.Errorf("cost-based selection failed: %w", err)
-	}
-	
-	if selectedProvider == nil {
-		return ProviderAssignment{}, fmt.Errorf("no suitable provider found")
-	}
-	
-	// Calculate estimated cost and time
-	estimatedCost := e.calculateEstimatedCost(selectedProvider, estimatedTokens)
-	estimatedTime := e.estimateTaskTime(selectedProvider, complexity)
-	
-	// Create alternatives list from other providers
-	alternatives := e.generateAlternatives(selectedProvider, model, estimatedTokens, complexity)
-	
-	assignment := ProviderAssignment{
-		TaskID:        taskID,
-		ProviderID:    selectedProvider.Name,
-		ProviderName:  selectedProvider.Name,
-		ProviderTier:  selectedProvider.Tier,
-		Model:         model,
-		Tier:          string(selectedProvider.Tier),
-		Confidence:    0.9, // High confidence with cost-based selection
-		EstimatedCost: estimatedCost,
-		EstimatedTime: int64(estimatedTime),
-		Reasoning:     e.generateCostOptimizedReasoning(selectedProvider, complexity, estimatedCost),
-		Alternatives:  alternatives,
-		Metadata:      map[string]interface{}{
-			"selection_method": "cost_optimized",
-			"estimated_tokens": estimatedTokens,
-			"cost_per_token":   selectedProvider.Pricing.InputTokenCost,
-		},
-	}
-	
-	e.logger.Infof("Selected cost-optimal provider %s for task %s (estimated cost: $%.6f)", 
-		selectedProvider.Name, taskID, estimatedCost)
-	
+
 	return assignment, nil
 }
 
-// estimateTokensFromComplexity estimates token usage based on task complexity
-func (e *EnhancedProviderSelector) estimateTokensFromComplexity(complexity TaskComplexity) int64 {
-	baseTokens := int64(100)
-	
-	switch complexity.Overall {
-	case VeryHigh:
-		return baseTokens * 20 // 2000 tokens
-	case High:
-		return baseTokens * 10 // 1000 tokens
-	case Medium:
-		return baseTokens * 5  // 500 tokens
-	case Low:
-		return baseTokens * 2  // 200 tokens
-	default:
-		return baseTokens * 3  // 300 tokens
-	}
-}
+// filterProvidersByCapabilities filters providers based on required capabilities
+func (eps *EnhancedProviderSelector) filterProvidersByCapabilities(requiredCapabilities []string) []*Provider {
+	var compatibleProviders []*Provider
 
-// calculateEstimatedCost calculates estimated cost for a provider
-func (e *EnhancedProviderSelector) calculateEstimatedCost(provider *Provider, estimatedTokens int64) float64 {
-	if provider.Pricing == nil {
-		return 0.001 * float64(estimatedTokens) // Default fallback
-	}
-	
-	// Assume 70% input tokens, 30% output tokens
-	inputTokens := float64(estimatedTokens) * 0.7
-	outputTokens := float64(estimatedTokens) * 0.3
-	
-	return inputTokens*provider.Pricing.InputTokenCost + outputTokens*provider.Pricing.OutputTokenCost
-}
-
-// estimateTaskTime estimates task completion time
-func (e *EnhancedProviderSelector) estimateTaskTime(provider *Provider, complexity TaskComplexity) int {
-	baseTime := int(provider.Metrics.AverageLatency) // Base latency in ms
-	
-	// Adjust based on complexity
-	complexityMultiplier := 1.0
-	switch complexity.Overall {
-	case VeryHigh:
-		complexityMultiplier = 2.0
-	case High:
-		complexityMultiplier = 1.5
-	case Medium:
-		complexityMultiplier = 1.2
-	case Low:
-		complexityMultiplier = 1.0
-	}
-	
-	return int(float64(baseTime) * complexityMultiplier)
-}
-
-// generateAlternatives creates alternative provider options
-func (e *EnhancedProviderSelector) generateAlternatives(selectedProvider *Provider, model string, estimatedTokens int64, complexity TaskComplexity) []AlternativeProvider {
-	var alternatives []AlternativeProvider
-	
-	for _, provider := range e.providers {
-		if provider.Name == selectedProvider.Name {
-			continue // Skip the selected provider
-		}
-		
-		// Check if provider can handle the request
-		if e.rateLimitManager != nil {
-			if canHandle, _ := e.rateLimitManager.CanHandleRequest(provider.Name, model, estimatedTokens); !canHandle {
-				continue
+	for _, provider := range eps.providers {
+		isCompatible := true
+		for _, requiredCap := range requiredCapabilities {
+			if !eps.providerHasCapability(provider, requiredCap) {
+				isCompatible = false
+				break
 			}
 		}
-		
-		estimatedCost := e.calculateEstimatedCost(provider, estimatedTokens)
-		estimatedTime := e.estimateTaskTime(provider, complexity)
-		
-		alternative := AlternativeProvider{
-			ProviderID:    provider.Name,
-			ProviderName:  provider.Name,
-			Model:         model,
-			Confidence:    0.8, // Slightly lower confidence for alternatives
-			EstimatedCost: estimatedCost,
-			EstimatedTime: int64(estimatedTime),
-			Reasoning:     fmt.Sprintf("Alternative %s provider with estimated cost $%.6f", provider.Tier, estimatedCost),
-		}
-		
-		alternatives = append(alternatives, alternative)
-		
-		if len(alternatives) >= 3 {
-			break // Limit to top 3 alternatives
+		if isCompatible {
+			compatibleProviders = append(compatibleProviders, provider)
 		}
 	}
-	
-	return alternatives
+
+	return compatibleProviders
 }
 
-// generateCostOptimizedReasoning generates reasoning for cost-optimized selection
-func (e *EnhancedProviderSelector) generateCostOptimizedReasoning(provider *Provider, complexity TaskComplexity, estimatedCost float64) string {
-	return fmt.Sprintf("Selected %s (tier: %s) using cost-optimization algorithm. "+
-		"Estimated cost: $%.6f for %s complexity task. "+
-		"Provider offers optimal balance of cost efficiency (%.2f), reliability (%.2f), and capability alignment.",
-		provider.Name, provider.Tier, estimatedCost, complexity.Overall,
-		provider.Metrics.CostEfficiency, provider.Metrics.ReliabilityScore)
-}
-
-// RecordProviderPerformance records actual performance for learning
-func (e *EnhancedProviderSelector) RecordProviderPerformance(taskID string, provider *Provider, actualCost, actualLatency, qualityScore float64, success bool) {
-	if e.metricsStorage != nil {
-		// Record metrics in persistent storage
-		tokensUsed := int64(actualCost / provider.Pricing.InputTokenCost) // Rough estimate
-		e.metricsStorage.RecordProviderMetrics(
-			provider.Name, "default", 1, 0, tokensUsed,
-			actualLatency, actualCost, false)
+// providerHasCapability checks if a provider has a specific capability
+func (eps *EnhancedProviderSelector) providerHasCapability(provider *Provider, capability string) bool {
+	// Check provider's declared capabilities
+	for _, cap := range provider.Capabilities {
+		if strings.EqualFold(cap, capability) {
+			return true
+		}
 	}
-	
-	// Update provider metrics
-	e.providersMutex.Lock()
-	defer e.providersMutex.Unlock()
-	
-	provider.Metrics.RequestCount++
-	if success {
-		provider.Metrics.SuccessfulRequests++
-	} else {
-		provider.Metrics.ErrorCount++
+
+	// Check capability filters
+	if compatibleModels, exists := eps.capabilityFilters[capability]; exists {
+		for _, model := range provider.Models {
+			for _, compatibleModel := range compatibleModels {
+				if strings.Contains(strings.ToLower(model), strings.ToLower(compatibleModel)) {
+					return true
+				}
+			}
+		}
 	}
-	
-	// Update running averages
-	provider.Metrics.SuccessRate = float64(provider.Metrics.SuccessfulRequests) / float64(provider.Metrics.RequestCount)
-	provider.Metrics.AverageLatency = (provider.Metrics.AverageLatency + actualLatency) / 2
-	provider.Metrics.AverageCost = (provider.Metrics.AverageCost + actualCost) / 2
-	provider.Metrics.QualityScore = (provider.Metrics.QualityScore + qualityScore) / 2
-	provider.Metrics.LastUpdated = time.Now()
-	
-	e.logger.Infof("Updated performance metrics for provider %s: success_rate=%.2f, avg_cost=$%.6f", 
-		provider.Name, provider.Metrics.SuccessRate, provider.Metrics.AverageCost)
+
+	return false
 }
 
-// GetProviders returns all available providers
-func (e *EnhancedProviderSelector) GetProviders() []*Provider {
-	e.providersMutex.RLock()
-	defer e.providersMutex.RUnlock()
-	
-	// Return a copy to prevent external modification
-	providers := make([]*Provider, len(e.providers))
-	copy(providers, e.providers)
-	return providers
+// scoreProviderForComplexity scores a provider based on task complexity
+func (eps *EnhancedProviderSelector) scoreProviderForComplexity(provider *Provider, complexity TaskComplexity) ProviderScore {
+	score := 0.0
+	reasoning := "Provider scoring: "
+
+	// Base score from tier
+	switch provider.Tier {
+	case OfficialTier:
+		score += 0.4
+		reasoning += "Official tier (+0.4), "
+	case CommunityTier:
+		score += 0.2
+		reasoning += "Community tier (+0.2), "
+	case UnofficialTier:
+		score += 0.1
+		reasoning += "Unofficial tier (+0.1), "
+	}
+
+	// Complexity-based scoring
+	complexityScore := float64(complexity.Overall) / float64(VeryHigh)
+	score += complexityScore * 0.3
+	reasoning += fmt.Sprintf("Complexity match (+%.2f), ", complexityScore*0.3)
+
+	// Cost efficiency (lower cost = higher score)
+	if provider.CostPerToken > 0 {
+		costScore := 1.0 / (provider.CostPerToken * 100000) // Normalize cost
+		if costScore > 0.2 {
+			costScore = 0.2 // Cap cost benefit
+		}
+		score += costScore
+		reasoning += fmt.Sprintf("Cost efficiency (+%.2f), ", costScore)
+	}
+
+	// Token capacity
+	if provider.MaxTokens >= complexity.TokenEstimate {
+		score += 0.1
+		reasoning += "Sufficient tokens (+0.1), "
+	}
+
+	// Health metrics (if available)
+	if provider.HealthMetrics != nil {
+		healthScore := eps.calculateHealthScore(provider)
+		score += healthScore * 0.2
+		reasoning += fmt.Sprintf("Health score (+%.2f), ", healthScore*0.2)
+	}
+
+	return ProviderScore{
+		Provider:   provider,
+		Score:      score,
+		Confidence: score, // Use score as confidence for now
+		Reasoning:  strings.TrimSuffix(reasoning, ", "),
+	}
 }
 
-// GetCostSavingsReport returns cost optimization analytics
-func (e *EnhancedProviderSelector) GetCostSavingsReport(days int) (*CostSavingsReport, error) {
-	if e.metricsStorage == nil {
-		return nil, fmt.Errorf("metrics storage not available")
+// calculateHealthScore calculates a health score for a provider
+func (eps *EnhancedProviderSelector) calculateHealthScore(provider *Provider) float64 {
+	if provider.HealthMetrics == nil {
+		return 0.5 // Neutral score if no health data
 	}
+
+	score := 0.0
 	
-	return e.metricsStorage.GetCostSavingsReport(days)
+	// Success rate
+	if provider.HealthMetrics.SuccessRate > 0.9 {
+		score += 0.4
+	} else if provider.HealthMetrics.SuccessRate > 0.8 {
+		score += 0.3
+	} else if provider.HealthMetrics.SuccessRate > 0.7 {
+		score += 0.2
+	}
+
+	// Average latency (lower is better)
+	if provider.HealthMetrics.AverageLatency < 1000 { // Less than 1 second
+		score += 0.3
+	} else if provider.HealthMetrics.AverageLatency < 3000 { // Less than 3 seconds
+		score += 0.2
+	} else if provider.HealthMetrics.AverageLatency < 5000 { // Less than 5 seconds
+		score += 0.1
+	}
+
+	// Error rate (lower is better)
+	if provider.HealthMetrics.ErrorRate < 0.05 { // Less than 5%
+		score += 0.3
+	} else if provider.HealthMetrics.ErrorRate < 0.1 { // Less than 10%
+		score += 0.2
+	} else if provider.HealthMetrics.ErrorRate < 0.2 { // Less than 20%
+		score += 0.1
+	}
+
+	return score
 }
 
-// Close closes database connections and cleans up resources
-func (e *EnhancedProviderSelector) Close() error {
-	if e.metricsStorage != nil {
-		return e.metricsStorage.Close()
+// selectBestModel selects the best model from a provider for the given complexity
+func (eps *EnhancedProviderSelector) selectBestModel(provider *Provider, complexity TaskComplexity) string {
+	if len(provider.Models) == 0 {
+		return "default"
 	}
-	return nil
+
+	// Simple model selection based on complexity
+	switch complexity.Overall {
+	case VeryHigh:
+		// Prefer most capable models
+		for _, model := range provider.Models {
+			if strings.Contains(strings.ToLower(model), "gpt-4") ||
+				strings.Contains(strings.ToLower(model), "claude-3") ||
+				strings.Contains(strings.ToLower(model), "opus") {
+				return model
+			}
+		}
+	case High:
+		// Prefer balanced models
+		for _, model := range provider.Models {
+			if strings.Contains(strings.ToLower(model), "gpt-4") ||
+				strings.Contains(strings.ToLower(model), "claude") ||
+				strings.Contains(strings.ToLower(model), "sonnet") {
+				return model
+			}
+		}
+	case Medium:
+		// Prefer efficient models
+		for _, model := range provider.Models {
+			if strings.Contains(strings.ToLower(model), "gpt-3.5") ||
+				strings.Contains(strings.ToLower(model), "claude-instant") ||
+				strings.Contains(strings.ToLower(model), "haiku") {
+				return model
+			}
+		}
+	}
+
+	// Default to first available model
+	return provider.Models[0]
+}
+
+// GetCapabilityFilters returns the current capability filters
+func (eps *EnhancedProviderSelector) GetCapabilityFilters() map[string][]string {
+	return eps.capabilityFilters
+}
+
+// SetCapabilityFilters sets new capability filters
+func (eps *EnhancedProviderSelector) SetCapabilityFilters(filters map[string][]string) {
+	eps.capabilityFilters = filters
+}
+
+// GetProviderStats returns statistics about providers
+func (eps *EnhancedProviderSelector) GetProviderStats() map[string]interface{} {
+	stats := map[string]interface{}{
+		"total_providers": len(eps.providers),
+		"providers_by_tier": map[string]int{
+			"official":   0,
+			"community":  0,
+			"unofficial": 0,
+		},
+		"total_models": 0,
+		"capabilities": eps.capabilityFilters,
+	}
+
+	for _, provider := range eps.providers {
+		stats["total_models"] = stats["total_models"].(int) + len(provider.Models)
+		
+		tierStats := stats["providers_by_tier"].(map[string]int)
+		switch provider.Tier {
+		case OfficialTier:
+			tierStats["official"]++
+		case CommunityTier:
+			tierStats["community"]++
+		case UnofficialTier:
+			tierStats["unofficial"]++
+		}
+	}
+
+	return stats
 }
