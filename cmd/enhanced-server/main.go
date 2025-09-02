@@ -20,15 +20,16 @@ func main() {
 	logger := logrus.New()
 	logger.SetLevel(logrus.InfoLevel)
 
-	// Initialize enhanced system
+	// Initialize enhanced system with capability filtering
 	providersFile := "providers.csv"
 	if len(os.Args) > 1 {
 		providersFile = os.Args[1]
 	}
 
+	// Use the new enhanced system with capability filtering
 	system, err := enhanced.NewEnhancedSystem(logger, providersFile)
 	if err != nil {
-		logger.Fatalf("Failed to initialize enhanced system: %v", err)
+		logger.Fatalf("Failed to initialize enhanced system with capability filtering: %v", err)
 	}
 
 	// Create HTTP server
@@ -63,7 +64,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Infof("Starting Enhanced Your PaL MoE server on %s", addr)
+		logger.Infof("Starting Enhanced Your PaL MoE server with capability filtering on %s", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatalf("Server failed to start: %v", err)
 		}
@@ -96,7 +97,8 @@ func (h *HTTPServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"status":    "healthy",
 		"timestamp": time.Now().Unix(),
-		"version":   "enhanced-1.0.0",
+		"version":   "enhanced-2.0.0-capability-filtering",
+		"features":  []string{"capability-filtering", "provider-matching", "task-type-detection"},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -117,9 +119,9 @@ func (h *HTTPServer) processHandler(w http.ResponseWriter, r *http.Request) {
 	// Set timestamp
 	input.Timestamp = time.Now()
 
-	h.logger.Infof("Processing request: %s", input.ID)
+	h.logger.Infof("Processing request with capability filtering: %s", input.ID)
 
-	// Process request
+	// Process request with enhanced capability filtering
 	result, err := h.system.ProcessRequest(r.Context(), input)
 	if err != nil {
 		h.logger.Errorf("Failed to process request %s: %v", input.ID, err)
@@ -158,6 +160,7 @@ func (h *HTTPServer) getMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(metrics)
 }
+
 func (h *HTTPServer) generateProviderYAMLHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	providerID := vars["id"]
@@ -183,6 +186,7 @@ func (h *HTTPServer) generateAllYAMLsHandler(w http.ResponseWriter, r *http.Requ
 		"generated_count": len(yamls),
 		"providers":       yamls,
 		"timestamp":       time.Now().Unix(),
+		"capability_filtering": "enabled",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
