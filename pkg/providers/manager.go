@@ -1,64 +1,61 @@
 package providers
 
 import (
-	"encoding/json"
-	"net/http"
+	"context"
 	"sync"
 	"time"
 )
 
-// ProviderConfig represents a provider configuration
-type ProviderConfig struct {
-	Name         string            `json:"name"`
-	URL          string            `json:"url"`
-	Models       []string          `json:"models"`
-	Capabilities []string          `json:"capabilities"`
-	Priority     int               `json:"priority"`
-	Metadata     map[string]string `json:"metadata"`
-}
-
-// Provider represents a model provider
-type Provider struct {
-	Name         string            `json:"name"`
-	URL          string            `json:"url"`
-	Models       []string          `json:"models"`
-	Capabilities []string          `json:"capabilities"`
-	Priority     int               `json:"priority"`
-	Status       string            `json:"status"`
-	Metadata     map[string]string `json:"metadata"`
-}
-
-// Manager handles provider operations
+// Manager handles provider operations and health monitoring
 type Manager struct {
-	providers map[string]*Provider
-	mutex     sync.RWMutex
-	monitor   *HealthMonitor
+	providers     map[string]*Provider
+	healthMonitor *HealthMonitor
+	mu            sync.RWMutex
+}
+
+// Provider represents a configured provider
+type Provider struct {
+	Name         string
+	URL          string
+	Models       []string
+	Capabilities []string
+	Priority     int
+	Metadata     map[string]interface{}
+	IsHealthy    bool
+	LastChecked  time.Time
 }
 
 // NewManager creates a new provider manager
 func NewManager() *Manager {
 	return &Manager{
-		providers: make(map[string]*Provider),
-		monitor:   NewHealthMonitor(nil, 30*time.Second),
+		providers:     make(map[string]*Provider),
+		healthMonitor: NewHealthMonitor(30*time.Second, 5*time.Minute),
 	}
 }
 
-// LoadProvidersFromConfigs loads providers from configuration structs
-func (m *Manager) LoadProvidersFromConfigs(configs []ProviderConfig) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+// LoadFromConfig loads providers from configuration
+func (m *Manager) LoadFromConfig(configs []ProviderConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	for _, providerCfg := range configs {
+	for _, config := range configs {
 		provider := &Provider{
-			Name:         providerCfg.Name,
-			URL:          providerCfg.URL,
-			Models:       providerCfg.Models,
-			Capabilities: providerCfg.Capabilities,
-			Priority:     providerCfg.Priority,
-			Status:       "unknown",
-			Metadata:     providerCfg.Metadata,
+			Name:         config.Name,
+			URL:          config.URL,
+			Models:       config.Models,
+			Capabilities: config.Capabilities,
+			Priority:     config.Priority,
+			Metadata:     config.Metadata,
+			IsHealthy:    true,
+			LastChecked:  time.Now(),
 		}
-		m.providers[provider.Name] = provider
+
+		m.providers[config.Name] = provider
+		
+		// Start health monitoring for this provider
+		if config.URL != "" {
+			m.healthMonitor.AddProvider(config.Name, config.URL)
+		}
 	}
 
 	return nil
@@ -66,118 +63,77 @@ func (m *Manager) LoadProvidersFromConfigs(configs []ProviderConfig) error {
 
 // GetProvider returns a provider by name
 func (m *Manager) GetProvider(name string) (*Provider, bool) {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
 	provider, exists := m.providers[name]
 	return provider, exists
 }
 
 // GetAllProviders returns all providers
 func (m *Manager) GetAllProviders() map[string]*Provider {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	
 	result := make(map[string]*Provider)
-	for k, v := range m.providers {
-		result[k] = v
+	for name, provider := range m.providers {
+		result[name] = provider
 	}
 	return result
 }
 
-// UpdateProviderStatus updates the status of a provider
-func (m *Manager) UpdateProviderStatus(name, status string) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+// GetHealthyProviders returns only healthy providers
+func (m *Manager) GetHealthyProviders() map[string]*Provider {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	result := make(map[string]*Provider)
+	for name, provider := range m.providers {
+		if provider.IsHealthy {
+			result[name] = provider
+		}
+	}
+	return result
+}
+
+// UpdateProviderHealth updates the health status of a provider
+func (m *Manager) UpdateProviderHealth(name string, isHealthy bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	
 	if provider, exists := m.providers[name]; exists {
-		provider.Status = status
+		provider.IsHealthy = isHealthy
+		provider.LastChecked = time.Now()
 	}
 }
 
-// StartHealthMonitoring starts health monitoring for all providers
-func (m *Manager) StartHealthMonitoring() {
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				m.checkProviderHealth()
-			}
-		}
-	}()
+// StartHealthMonitoring starts the health monitoring process
+func (m *Manager) StartHealthMonitoring(ctx context.Context) {
+	m.healthMonitor.Start(ctx, m.UpdateProviderHealth)
 }
 
-// checkProviderHealth checks the health of all providers
-func (m *Manager) checkProviderHealth() {
-	m.mutex.RLock()
-	providers := make([]*Provider, 0, len(m.providers))
-	for _, provider := range m.providers {
-		providers = append(providers, provider)
+// StopHealthMonitoring stops the health monitoring process
+func (m *Manager) StopHealthMonitoring() {
+	m.healthMonitor.Stop()
+}
+
+// GetProviderModels returns models for a specific provider
+func (m *Manager) GetProviderModels(name string) ([]string, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	if provider, exists := m.providers[name]; exists {
+		return provider.Models, true
 	}
-	m.mutex.RUnlock()
+	return nil, false
+}
 
-	for _, provider := range providers {
-		go func(p *Provider) {
-			// Simple health check - just check if we can reach the provider
-			if m.isProviderHealthy(p.URL) {
-				m.UpdateProviderStatus(p.Name, "healthy")
-			} else {
-				m.UpdateProviderStatus(p.Name, "unhealthy")
-			}
-		}(provider)
+// UpdateProviderModels updates the models for a provider
+func (m *Manager) UpdateProviderModels(name string, models []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	if provider, exists := m.providers[name]; exists {
+		provider.Models = models
 	}
-}
-
-// isProviderHealthy performs a simple health check
-func (m *Manager) isProviderHealthy(url string) bool {
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode < 500
-}
-
-// GetHealthyProviders returns only healthy providers
-func (m *Manager) GetHealthyProviders() []*Provider {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
-
-	var healthy []*Provider
-	for _, provider := range m.providers {
-		if provider.Status == "healthy" {
-			healthy = append(healthy, provider)
-		}
-	}
-	return healthy
-}
-
-// ServeHTTP implements http.Handler for provider management endpoints
-func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case "/providers":
-		m.handleGetProviders(w, r)
-	case "/providers/health":
-		m.handleGetHealth(w, r)
-	default:
-		http.NotFound(w, r)
-	}
-}
-
-func (m *Manager) handleGetProviders(w http.ResponseWriter, r *http.Request) {
-	providers := m.GetAllProviders()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providers)
-}
-
-func (m *Manager) handleGetHealth(w http.ResponseWriter, r *http.Request) {
-	healthy := m.GetHealthyProviders()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"healthy_count": len(healthy),
-		"providers":     healthy,
-	})
 }
