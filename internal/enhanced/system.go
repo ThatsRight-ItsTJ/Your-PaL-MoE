@@ -7,188 +7,135 @@ import (
 	"time"
 )
 
-// NewEnhancedSystem creates a new enhanced system instance
-func NewEnhancedSystem(providers []*Provider, config *Config) *EnhancedSystem {
+// NewEnhancedSystem creates a new enhanced system with default configuration
+func NewEnhancedSystem(providers []*Provider) *EnhancedSystem {
 	return &EnhancedSystem{
-		providers:         providers,
-		taskReasoner:      NewTaskReasoner(config),
-		providerSelector:  NewProviderSelector(providers),
-		spoOptimizer:      NewSPOOptimizer(config),
-		healthMonitor:     NewProviderHealthMonitor(providers),
-		metrics:           SystemMetrics{},
+		selector:    NewEnhancedProviderSelector(providers),
+		reasoner:    NewTaskReasoner(nil),
+		optimizer:   NewSPOOptimizer(nil),
+		healthMonitor: NewProviderHealthMonitor(),
+		providers:   providers,
+		metrics:     NewSystemMetrics(),
 	}
 }
 
-// ProcessRequest processes a request through the enhanced system
-func (es *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput) (*RequestResult, error) {
+// ProcessRequest processes a request using the enhanced system
+func (es *EnhancedSystem) ProcessRequest(ctx context.Context, input RequestInput) (*ProcessResponse, error) {
 	startTime := time.Now()
 
 	// Analyze task complexity
-	complexity, err := es.taskReasoner.AnalyzeComplexity(ctx, input)
+	complexity, err := es.reasoner.AnalyzeComplexity(ctx, input.Content, string(input.TaskType))
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze complexity: %w", err)
 	}
 
-	// Convert complexity to the expected format
-	taskComplexity := TaskComplexity{
-		Overall: complexity.Overall,
-		Score:   complexity.Overall,
-	}
-
-	// Optimize prompt if needed
-	optimizedPrompt, err := es.spoOptimizer.OptimizePrompt(ctx, input, complexity)
+	// Optimize prompt
+	optimizedPrompt, err := es.optimizer.OptimizePrompt(ctx, input.Content, *complexity)
 	if err != nil {
-		log.Printf("Warning: prompt optimization failed: %v", err)
-		optimizedPrompt = &OptimizedPrompt{
-			OriginalPrompt: input.Query,
-			OptimizedText:  input.Query,
-			CostSavings:    0,
-		}
+		log.Printf("Failed to optimize prompt: %v", err)
+		// Continue with original prompt
 	}
 
-	// Select best provider
-	assignment, err := es.providerSelector.SelectProvider(ctx, input, complexity)
+	// Select provider
+	assignment, err := es.selector.SelectProviderWithCapabilities(ctx, *complexity, complexity.RequiredCapabilities)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select provider: %w", err)
 	}
 
-	// Update system metrics
-	es.updateMetrics(startTime, true)
+	// Update metrics
+	es.metrics.IncrementTotalRequests()
+	es.metrics.RecordComplexity(complexity.Overall)
+	es.metrics.RecordProviderUsage(assignment.Provider.Name)
 
-	// Execute the request (placeholder implementation)
-	result := &RequestResult{
-		Response:   "Processed successfully", // This would be the actual LLM response
-		Provider:   assignment.Provider,
-		Model:      assignment.Model,
-		Complexity: taskComplexity,
-		Cost:       assignment.EstimatedCost,
-		Duration:   time.Since(startTime),
-		Metadata: map[string]interface{}{
-			"optimized_prompt": optimizedPrompt.OptimizedText,
-			"reasoning":        assignment.Reasoning,
-		},
+	// Process with selected provider (placeholder)
+	response := &ProcessResponse{
+		Content:     fmt.Sprintf("Processed by %s using model %s", assignment.Provider.Name, assignment.Model),
+		Provider:    assignment.Provider,
+		Model:       assignment.Model,
+		Complexity:  *complexity,
+		ProcessingTime: time.Since(startTime),
+		TokensUsed:  complexity.TokenEstimate,
+		Cost:        assignment.EstimatedCost,
+		Metadata:    make(map[string]interface{}),
 	}
 
-	return result, nil
+	if optimizedPrompt != nil {
+		response.Metadata["optimized_prompt"] = optimizedPrompt.OptimizedPrompt
+		response.Metadata["optimization_rules"] = optimizedPrompt.OptimizationRules
+	}
+
+	// Update provider health metrics
+	es.healthMonitor.UpdateMetrics(assignment.Provider.Name, true, time.Since(startTime))
+
+	return response, nil
 }
 
-// GetMetrics returns current system metrics
-func (es *EnhancedSystem) GetMetrics() SystemMetrics {
+// GetSystemMetrics returns system metrics
+func (es *EnhancedSystem) GetSystemMetrics() *SystemMetrics {
 	return es.metrics
 }
 
-// GetProviderHealth returns health status of all providers
-func (es *EnhancedSystem) GetProviderHealth() map[string]interface{} {
-	health := make(map[string]interface{})
-	for _, provider := range es.providers {
-		health[provider.ID] = provider.HealthMetrics
-	}
-	return health
-}
-
-// updateMetrics updates system metrics
-func (es *EnhancedSystem) updateMetrics(startTime time.Time, success bool) {
-	es.metrics.TotalRequests++
-	if success {
-		es.metrics.SuccessfulRequests++
-	} else {
-		es.metrics.FailedRequests++
-	}
-	
-	duration := time.Since(startTime)
-	if es.metrics.TotalRequests == 1 {
-		es.metrics.AverageLatency = duration
-	} else {
-		// Simple moving average
-		es.metrics.AverageLatency = time.Duration(
-			(int64(es.metrics.AverageLatency)*int64(es.metrics.TotalRequests-1) + int64(duration)) / int64(es.metrics.TotalRequests),
-		)
-	}
-	
-	es.metrics.LastUpdated = time.Now()
-}
-
-// MonitorHealth starts health monitoring for all providers
-func (es *EnhancedSystem) MonitorHealth(ctx context.Context) error {
-	return es.healthMonitor.StartMonitoring(ctx)
-}
-
 // GetProviderMetrics returns metrics for all providers
-func (es *EnhancedSystem) GetProviderMetrics() map[string]ProviderMetrics {
-	metrics := make(map[string]ProviderMetrics)
+func (es *EnhancedSystem) GetProviderMetrics() map[string]*ProviderHealthMetrics {
+	return es.healthMonitor.GetAllMetrics()
+}
+
+// GetProviderMetricsByName returns metrics for a specific provider
+func (es *EnhancedSystem) GetProviderMetricsByName(providerName string) *ProviderHealthMetrics {
+	return es.healthMonitor.GetMetrics(providerName)
+}
+
+// UpdateProviderHealth updates health metrics for a provider
+func (es *EnhancedSystem) UpdateProviderHealth(providerName string, success bool, latency time.Duration) {
+	es.healthMonitor.UpdateMetrics(providerName, success, latency)
+}
+
+// GetHealthyProviders returns a list of healthy providers
+func (es *EnhancedSystem) GetHealthyProviders() []*Provider {
+	var healthyProviders []*Provider
 	for _, provider := range es.providers {
-		metrics[provider.ID] = provider.Metrics
-	}
-	return metrics
-}
-
-// OptimizePrompt optimizes a prompt for better performance
-func (es *EnhancedSystem) OptimizePrompt(ctx context.Context, prompt string, complexity TaskComplexity) (*OptimizedPrompt, error) {
-	input := RequestInput{Query: prompt}
-	return es.spoOptimizer.OptimizePrompt(ctx, input, &complexity)
-}
-
-// SelectProvider selects the best provider for a given task
-func (es *EnhancedSystem) SelectProvider(ctx context.Context, input RequestInput, complexity TaskComplexity) (*ProviderAssignment, error) {
-	return es.providerSelector.SelectProvider(ctx, input, &complexity)
-}
-
-// AnalyzeComplexity analyzes the complexity of a task
-func (es *EnhancedSystem) AnalyzeComplexity(ctx context.Context, input RequestInput) (*TaskComplexity, error) {
-	return es.taskReasoner.AnalyzeComplexity(ctx, input)
-}
-
-// UpdateProviderMetrics updates metrics for a specific provider
-func (es *EnhancedSystem) UpdateProviderMetrics(providerID string, metrics ProviderMetrics) error {
-	for _, provider := range es.providers {
-		if provider.ID == providerID {
-			provider.Metrics = metrics
-			return nil
+		if es.healthMonitor.IsHealthy(provider.Name) {
+			healthyProviders = append(healthyProviders, provider)
 		}
 	}
-	return fmt.Errorf("provider %s not found", providerID)
+	return healthyProviders
 }
 
-// GetProvider returns a provider by ID
-func (es *EnhancedSystem) GetProvider(providerID string) (*Provider, error) {
-	for _, provider := range es.providers {
-		if provider.ID == providerID {
-			return provider, nil
-		}
+// OptimizePromptOnly optimizes a prompt without full processing
+func (es *EnhancedSystem) OptimizePromptOnly(ctx context.Context, input RequestInput) (*OptimizedPrompt, error) {
+	// Analyze complexity first
+	complexity, err := es.reasoner.AnalyzeComplexity(ctx, input.Content, string(input.TaskType))
+	if err != nil {
+		return nil, fmt.Errorf("failed to analyze complexity: %w", err)
 	}
-	return nil, fmt.Errorf("provider %s not found", providerID)
+
+	// Optimize prompt
+	return es.optimizer.OptimizePrompt(ctx, input.Content, *complexity)
 }
 
-// ListProviders returns all available providers
-func (es *EnhancedSystem) ListProviders() []*Provider {
-	return es.providers
+// AnalyzeComplexityOnly analyzes task complexity without full processing
+func (es *EnhancedSystem) AnalyzeComplexityOnly(ctx context.Context, input RequestInput) (*TaskComplexity, error) {
+	return es.reasoner.AnalyzeComplexity(ctx, input.Content, string(input.TaskType))
 }
 
-// AddProvider adds a new provider to the system
-func (es *EnhancedSystem) AddProvider(provider *Provider) {
-	es.providers = append(es.providers, provider)
+// SelectProviderOnly selects a provider without full processing
+func (es *EnhancedSystem) SelectProviderOnly(ctx context.Context, complexity TaskComplexity, requiredCapabilities []string) (*ProviderAssignment, error) {
+	return es.selector.SelectProviderWithCapabilities(ctx, complexity, requiredCapabilities)
 }
 
-// RemoveProvider removes a provider from the system
-func (es *EnhancedSystem) RemoveProvider(providerID string) error {
-	for i, provider := range es.providers {
-		if provider.ID == providerID {
-			es.providers = append(es.providers[:i], es.providers[i+1:]...)
-			return nil
-		}
-	}
-	return fmt.Errorf("provider %s not found", providerID)
+// GetProviderStats returns statistics about providers
+func (es *EnhancedSystem) GetProviderStats() map[string]interface{} {
+	return es.selector.GetProviderStats()
+}
+
+// ResetProviderMetrics resets metrics for a specific provider
+func (es *EnhancedSystem) ResetProviderMetrics(providerName string) {
+	es.healthMonitor.ResetMetrics(providerName)
 }
 
 // Shutdown gracefully shuts down the enhanced system
 func (es *EnhancedSystem) Shutdown(ctx context.Context) error {
 	log.Println("Shutting down enhanced system...")
-	
-	// Stop health monitoring
-	if es.healthMonitor != nil {
-		// Add shutdown logic for health monitor if needed
-	}
-	
-	log.Println("Enhanced system shutdown complete")
+	// Add any cleanup logic here
 	return nil
 }

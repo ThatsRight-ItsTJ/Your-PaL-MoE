@@ -1,7 +1,6 @@
 package enhanced
 
 import (
-	"context"
 	"time"
 )
 
@@ -16,8 +15,8 @@ const (
 )
 
 // String returns the string representation of ComplexityLevel
-func (c ComplexityLevel) String() string {
-	switch c {
+func (cl ComplexityLevel) String() string {
+	switch cl {
 	case Low:
 		return "low"
 	case Medium:
@@ -31,187 +30,257 @@ func (c ComplexityLevel) String() string {
 	}
 }
 
-// TaskComplexity represents the complexity analysis of a task
-type TaskComplexity struct {
-	Overall          ComplexityLevel            `json:"overall"`
-	Reasoning        ComplexityLevel            `json:"reasoning"`
-	Mathematical     ComplexityLevel            `json:"mathematical"`
-	Creative         ComplexityLevel            `json:"creative"`
-	Factual          ComplexityLevel            `json:"factual"`
-	TokenEstimate    int64                      `json:"token_estimate"`
-	RequiredCapabilities []string               `json:"required_capabilities"`
-	Metadata         map[string]interface{}     `json:"metadata"`
-}
-
-// ProviderTier represents the tier/quality level of a provider
-type ProviderTier int
+// TaskType represents different types of tasks
+type TaskType string
 
 const (
-	OfficialTier ProviderTier = iota
-	CommunityTier
-	UnofficialTier
+	TaskTypeText        TaskType = "text"
+	TaskTypeCode        TaskType = "code"
+	TaskTypeImage       TaskType = "image"
+	TaskTypeAudio       TaskType = "audio"
+	TaskTypeVideo       TaskType = "video"
+	TaskTypeMultimodal  TaskType = "multimodal"
 )
 
-// String returns the string representation of ProviderTier
-func (p ProviderTier) String() string {
-	switch p {
-	case OfficialTier:
-		return "official"
-	case CommunityTier:
-		return "community"
-	case UnofficialTier:
-		return "unofficial"
-	default:
-		return "unknown"
-	}
+// TaskComplexity represents the complexity analysis of a task
+type TaskComplexity struct {
+	Overall              ComplexityLevel        `json:"overall"`
+	Reasoning            ComplexityLevel        `json:"reasoning"`
+	Mathematical         ComplexityLevel        `json:"mathematical"`
+	Creative             ComplexityLevel        `json:"creative"`
+	Factual              ComplexityLevel        `json:"factual"`
+	TokenEstimate        int64                  `json:"token_estimate"`
+	RequiredCapabilities []string               `json:"required_capabilities"`
+	Metadata             map[string]interface{} `json:"metadata"`
 }
 
-// Provider represents an AI provider with enhanced metadata
+// ProviderTier represents the tier of a provider
+type ProviderTier string
+
+const (
+	OfficialTier   ProviderTier = "official"
+	CommunityTier  ProviderTier = "community"
+	UnofficialTier ProviderTier = "unofficial"
+)
+
+// Provider represents an AI provider
 type Provider struct {
-	Name             string                     `json:"name"`
-	BaseURL          string                     `json:"base_url"`
-	APIKey           string                     `json:"api_key"`
-	Models           []string                   `json:"models"`
-	Tier             ProviderTier               `json:"tier"`
-	MaxTokens        int64                      `json:"max_tokens"`
-	CostPerToken     float64                    `json:"cost_per_token"`
-	Capabilities     []string                   `json:"capabilities"`
-	RateLimits       map[string]int64           `json:"rate_limits"`
-	HealthMetrics    *ProviderHealthMetrics     `json:"health_metrics,omitempty"`
-	Metadata         map[string]interface{}     `json:"metadata"`
-	LastUpdated      time.Time                  `json:"last_updated"`
+	Name           string                 `json:"name"`
+	BaseURL        string                 `json:"base_url"`
+	Models         []string               `json:"models"`
+	Tier           ProviderTier           `json:"tier"`
+	MaxTokens      int64                  `json:"max_tokens"`
+	CostPerToken   float64                `json:"cost_per_token"`
+	Capabilities   []string               `json:"capabilities"`
+	RateLimits     map[string]int64       `json:"rate_limits"`
+	HealthMetrics  *ProviderHealthMetrics `json:"health_metrics,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata"`
+	LastUpdated    time.Time              `json:"last_updated"`
 }
 
 // ProviderAssignment represents a provider assignment for a task
 type ProviderAssignment struct {
-	Provider         *Provider                  `json:"provider"`
-	Model            string                     `json:"model"`
-	Confidence       float64                    `json:"confidence"`
-	EstimatedCost    float64                    `json:"estimated_cost"`
-	EstimatedTokens  int64                      `json:"estimated_tokens"`
-	Reasoning        string                     `json:"reasoning"`
-	Alternatives     []*Provider                `json:"alternatives,omitempty"`
-	Metadata         map[string]interface{}     `json:"metadata"`
+	Provider        *Provider              `json:"provider"`
+	Model           string                 `json:"model"`
+	Confidence      float64                `json:"confidence"`
+	EstimatedCost   float64                `json:"estimated_cost"`
+	EstimatedTokens int64                  `json:"estimated_tokens"`
+	Reasoning       string                 `json:"reasoning"`
+	Alternatives    []*Provider            `json:"alternatives"`
+	Metadata        map[string]interface{} `json:"metadata"`
 }
 
-// TaskType represents the type of task being processed
-type TaskType string
-
-const (
-	TaskTypeReasoning    TaskType = "reasoning"
-	TaskTypeMathematical TaskType = "mathematical"
-	TaskTypeCreative     TaskType = "creative"
-	TaskTypeFactual      TaskType = "factual"
-	TaskTypeGeneral      TaskType = "general"
-)
-
-// ProcessResponse represents the response from processing a task
-type ProcessResponse struct {
-	Content          string                     `json:"content"`
-	TokensUsed       int64                      `json:"tokens_used"`
-	Cost             float64                    `json:"cost"`
-	Latency          time.Duration              `json:"latency"`
-	Provider         string                     `json:"provider"`
-	Model            string                     `json:"model"`
-	Success          bool                       `json:"success"`
-	Error            error                      `json:"error,omitempty"`
-	Metadata         map[string]interface{}     `json:"metadata"`
+// ProviderScore represents a provider's score for a task
+type ProviderScore struct {
+	Provider   *Provider `json:"provider"`
+	Score      float64   `json:"score"`
+	Confidence float64   `json:"confidence"`
+	Reasoning  string    `json:"reasoning"`
 }
 
-// RequestInput represents input for processing requests
+// RequestInput represents input for processing
 type RequestInput struct {
-	Content          string                     `json:"content"`
-	TaskType         TaskType                   `json:"task_type,omitempty"`
-	MaxTokens        int64                      `json:"max_tokens,omitempty"`
-	Temperature      float64                    `json:"temperature,omitempty"`
-	PreferredProvider string                    `json:"preferred_provider,omitempty"`
-	Metadata         map[string]interface{}     `json:"metadata,omitempty"`
+	Content     string                 `json:"content"`
+	TaskType    TaskType               `json:"task_type"`
+	MaxTokens   int64                  `json:"max_tokens,omitempty"`
+	Temperature float64                `json:"temperature,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// TaskReasoner analyzes task complexity
+// ProcessResponse represents the response from processing
+type ProcessResponse struct {
+	Content        string                 `json:"content"`
+	Provider       *Provider              `json:"provider"`
+	Model          string                 `json:"model"`
+	Complexity     TaskComplexity         `json:"complexity"`
+	ProcessingTime time.Duration          `json:"processing_time"`
+	TokensUsed     int64                  `json:"tokens_used"`
+	Cost           float64                `json:"cost"`
+	Metadata       map[string]interface{} `json:"metadata"`
+}
+
+// OptimizedPrompt represents an optimized prompt
+type OptimizedPrompt struct {
+	OriginalPrompt    string                 `json:"original_prompt"`
+	OptimizedPrompt   string                 `json:"optimized_prompt"`
+	Complexity        ComplexityLevel        `json:"complexity"`
+	OptimizationRules []string               `json:"optimization_rules"`
+	Metadata          map[string]interface{} `json:"metadata"`
+	ProcessingTime    time.Duration          `json:"processing_time"`
+}
+
+// SystemMetrics represents system-wide metrics
+type SystemMetrics struct {
+	TotalRequests     int64                        `json:"total_requests"`
+	SuccessfulRequests int64                       `json:"successful_requests"`
+	FailedRequests    int64                        `json:"failed_requests"`
+	AverageLatency    time.Duration                `json:"average_latency"`
+	ComplexityDistribution map[ComplexityLevel]int64 `json:"complexity_distribution"`
+	ProviderUsage     map[string]int64             `json:"provider_usage"`
+	TotalCost         float64                      `json:"total_cost"`
+	TotalTokens       int64                        `json:"total_tokens"`
+	StartTime         time.Time                    `json:"start_time"`
+}
+
+// NewSystemMetrics creates a new SystemMetrics instance
+func NewSystemMetrics() *SystemMetrics {
+	return &SystemMetrics{
+		ComplexityDistribution: make(map[ComplexityLevel]int64),
+		ProviderUsage:         make(map[string]int64),
+		StartTime:             time.Now(),
+	}
+}
+
+// IncrementTotalRequests increments the total request count
+func (sm *SystemMetrics) IncrementTotalRequests() {
+	sm.TotalRequests++
+}
+
+// IncrementSuccessfulRequests increments the successful request count
+func (sm *SystemMetrics) IncrementSuccessfulRequests() {
+	sm.SuccessfulRequests++
+}
+
+// IncrementFailedRequests increments the failed request count
+func (sm *SystemMetrics) IncrementFailedRequests() {
+	sm.FailedRequests++
+}
+
+// RecordComplexity records complexity distribution
+func (sm *SystemMetrics) RecordComplexity(level ComplexityLevel) {
+	sm.ComplexityDistribution[level]++
+}
+
+// RecordProviderUsage records provider usage
+func (sm *SystemMetrics) RecordProviderUsage(providerName string) {
+	sm.ProviderUsage[providerName]++
+}
+
+// AddCost adds to the total cost
+func (sm *SystemMetrics) AddCost(cost float64) {
+	sm.TotalCost += cost
+}
+
+// AddTokens adds to the total token count
+func (sm *SystemMetrics) AddTokens(tokens int64) {
+	sm.TotalTokens += tokens
+}
+
+// EnhancedSystem represents the main enhanced system
+type EnhancedSystem struct {
+	selector      *EnhancedProviderSelector
+	reasoner      *TaskReasoner
+	optimizer     *SPOOptimizer
+	healthMonitor *ProviderHealthMonitor
+	providers     []*Provider
+	metrics       *SystemMetrics
+}
+
+// TaskReasoner represents a task complexity analyzer
 type TaskReasoner struct {
-	complexityWeights map[string]float64
-	tokenEstimator    *TokenEstimator
+	config *TaskReasonerConfig
 }
 
-// ProviderSelector selects optimal providers
-type ProviderSelector struct {
+// TaskReasonerConfig represents configuration for task reasoner
+type TaskReasonerConfig struct {
+	ComplexityWeights map[string]float64                   `json:"complexity_weights"`
+	TokenMultipliers  map[ComplexityLevel]float64          `json:"token_multipliers"`
+}
+
+// SPOOptimizer represents a self-prompt optimizer
+type SPOOptimizer struct {
+	templates         map[string]string
+	optimizationRules map[ComplexityLevel][]string
+	cache            map[string]CachedOptimization
+	maxCacheSize     int
+	cacheHitRate     float64
+	totalOptimizations int64
+}
+
+// CachedOptimization represents a cached optimization result
+type CachedOptimization struct {
+	OptimizedPrompt string
+	Complexity      ComplexityLevel
+	Timestamp       time.Time
+	HitCount        int
+}
+
+// ProviderHealthMetrics represents health metrics for a provider (defined in provider_health.go)
+type ProviderHealthMetrics struct {
+	SuccessRate        float64   `json:"success_rate"`
+	AverageLatency     float64   `json:"average_latency"`
+	ErrorRate          float64   `json:"error_rate"`
+	TotalRequests      int64     `json:"total_requests"`
+	SuccessfulRequests int64     `json:"successful_requests"`
+	FailedRequests     int64     `json:"failed_requests"`
+	LastUpdated        time.Time `json:"last_updated"`
+	Status             string    `json:"status"`
+}
+
+// ProviderHealthMonitor monitors provider health
+type ProviderHealthMonitor struct {
+	providers map[string]*ProviderHealthMetrics
+}
+
+// EnhancedProviderSelector provides advanced provider selection
+type EnhancedProviderSelector struct {
 	providers         []*Provider
+	capabilityFilters map[string][]string
 	healthCalculator  *HealthScoreCalculator
 	costOptimizer     *CostBasedSelector
 }
 
-// SPOOptimizer optimizes prompts
-type SPOOptimizer struct {
-	optimizationRules map[ComplexityLevel][]string
-	templateCache     map[string]string
+// CostBasedSelector provides cost-based provider selection
+type CostBasedSelector struct {
+	costThresholds map[ComplexityLevel]float64
+	budgetLimits   map[string]float64
 }
 
-// EnhancedSystem orchestrates the enhanced system
-type EnhancedSystem struct {
-	taskReasoner      *TaskReasoner
-	providerSelector  *ProviderSelector
-	spoOptimizer      *SPOOptimizer
-	providers         []*Provider
-	metricsStorage    *MetricsStorage
-	rateLimitManager  *RateLimitManager
-	healthCalculator  *HealthScoreCalculator
+// NewCostBasedSelector creates a new cost-based selector
+func NewCostBasedSelector(costThresholds map[ComplexityLevel]float64, budgetLimits map[string]float64) *CostBasedSelector {
+	if costThresholds == nil {
+		costThresholds = map[ComplexityLevel]float64{
+			Low:      0.001,
+			Medium:   0.01,
+			High:     0.05,
+			VeryHigh: 0.1,
+		}
+	}
+	return &CostBasedSelector{
+		costThresholds: costThresholds,
+		budgetLimits:   budgetLimits,
+	}
 }
 
-// TokenEstimator estimates token usage
-type TokenEstimator struct {
-	baseTokensPerWord float64
-	complexityMultipliers map[ComplexityLevel]float64
-}
-
-// HealthScoreCalculator calculates provider health scores
-type HealthScoreCalculator struct {
-	WindowSize         time.Duration
-	MaxUsageRatio      float64
-	ReliabilityWeight  float64
-	CostWeight         float64
-	RateLimitWeight    float64
-}
-
-// Request represents a processing request
-type Request struct {
-	ID               string                     `json:"id"`
-	Content          string                     `json:"content"`
-	TaskType         TaskType                   `json:"task_type"`
-	Priority         int                        `json:"priority"`
-	MaxTokens        int64                      `json:"max_tokens"`
-	Temperature      float64                    `json:"temperature"`
-	Context          context.Context            `json:"-"`
-	Metadata         map[string]interface{}     `json:"metadata"`
-	CreatedAt        time.Time                  `json:"created_at"`
-}
-
-// Response represents a processing response
-type Response struct {
-	RequestID        string                     `json:"request_id"`
-	Content          string                     `json:"content"`
-	TokensUsed       int64                      `json:"tokens_used"`
-	Cost             float64                    `json:"cost"`
-	Latency          time.Duration              `json:"latency"`
-	Provider         string                     `json:"provider"`
-	Model            string                     `json:"model"`
-	Success          bool                       `json:"success"`
-	Error            string                     `json:"error,omitempty"`
-	Complexity       *TaskComplexity            `json:"complexity,omitempty"`
-	Assignment       *ProviderAssignment        `json:"assignment,omitempty"`
-	Metadata         map[string]interface{}     `json:"metadata"`
-	ProcessedAt      time.Time                  `json:"processed_at"`
-}
-
-// SystemConfig represents system configuration
-type SystemConfig struct {
-	Providers        []*Provider                `json:"providers"`
-	DefaultModel     string                     `json:"default_model"`
-	MaxRetries       int                        `json:"max_retries"`
-	Timeout          time.Duration              `json:"timeout"`
-	CostThreshold    float64                    `json:"cost_threshold"`
-	HealthThreshold  float64                    `json:"health_threshold"`
-	MetricsEnabled   bool                       `json:"metrics_enabled"`
-	DatabasePath     string                     `json:"database_path"`
-	Metadata         map[string]interface{}     `json:"metadata"`
+// sortProvidersByScore sorts providers by score (highest first)
+func sortProvidersByScore(scores []ProviderScore) []ProviderScore {
+	// Simple bubble sort for now
+	for i := 0; i < len(scores)-1; i++ {
+		for j := 0; j < len(scores)-i-1; j++ {
+			if scores[j].Score < scores[j+1].Score {
+				scores[j], scores[j+1] = scores[j+1], scores[j]
+			}
+		}
+	}
+	return scores
 }
