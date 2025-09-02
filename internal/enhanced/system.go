@@ -209,12 +209,12 @@ func (es *EnhancedSystem) OptimizePromptOnly(ctx context.Context, input RequestI
 }
 
 // AnalyzeComplexityOnly analyzes task complexity without full processing
-func (es *EnhancedSystem) AnalyzeComplexityOnly(ctx context.Context, input RequestInput) (*TaskComplexity, error) {
+func (es *EnhancedSystem) AnalyzeComplexityOnly(ctx context.Context, input RequestInput) (*components.TaskComplexity, error) {
 	return es.reasoner.AnalyzeComplexity(input.Content)
 }
 
 // SelectProviderOnly selects a provider without full processing
-func (es *EnhancedSystem) SelectProviderOnly(ctx context.Context, complexity TaskComplexity, requiredCapabilities []string) (*ProviderAssignment, error) {
+func (es *EnhancedSystem) SelectProviderOnly(ctx context.Context, complexity components.TaskComplexity, requiredCapabilities []string) (*ProviderAssignment, error) {
 	return es.selector.SelectProviderWithCapabilities(ctx, complexity, requiredCapabilities)
 }
 
