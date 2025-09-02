@@ -2,338 +2,239 @@ package enhanced
 
 import (
 	"context"
-	"encoding/csv"
 	"fmt"
-	"os"
+	"log"
+	"math"
+	"sort"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
-// AdaptiveProviderSelector implements intelligent provider selection
-type AdaptiveProviderSelector struct {
-	logger *logrus.Logger
-	
-	// Provider management
-	providers     []*Provider
-	providersMutex sync.RWMutex
-	providersFile  string
-	
-	// Selection configuration
-	costWeight        float64
-	performanceWeight float64
-	latencyWeight     float64
-	reliabilityWeight float64
-	adaptationRate    float64
-	
-	// Performance tracking
-	selectionHistory map[string][]SelectionRecord
-	historyMutex     sync.RWMutex
-}
+// SelectProvider selects the best provider for a given task
+func (ps *ProviderSelector) SelectProvider(ctx context.Context, input RequestInput, complexity *TaskComplexity) (*ProviderAssignment, error) {
+	if len(ps.providers) == 0 {
+		return nil, fmt.Errorf("no providers available")
+	}
 
-// NewAdaptiveProviderSelector creates a new adaptive provider selector
-func NewAdaptiveProviderSelector(logger *logrus.Logger, providersFile string) (*AdaptiveProviderSelector, error) {
-	selector := &AdaptiveProviderSelector{
-		logger:            logger,
-		providersFile:     providersFile,
-		costWeight:        0.4,
-		performanceWeight: 0.3,
-		latencyWeight:     0.2,
-		reliabilityWeight: 0.1,
-		adaptationRate:    0.05,
-		selectionHistory:  make(map[string][]SelectionRecord),
-	}
+	// Score each provider based on the task complexity and provider capabilities
+	scores := make(map[string]float64)
 	
-	// Load providers from CSV file
-	if err := selector.loadProviders(); err != nil {
-		return nil, fmt.Errorf("failed to load providers: %w", err)
-	}
-	
-	return selector, nil
-}
-
-// loadProviders loads providers from CSV file
-func (a *AdaptiveProviderSelector) loadProviders() error {
-	file, err := os.Open(a.providersFile)
-	if err != nil {
-		return fmt.Errorf("failed to open providers file: %w", err)
-	}
-	defer file.Close()
-	
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		return fmt.Errorf("failed to read CSV: %w", err)
-	}
-	
-	if len(records) == 0 {
-		return fmt.Errorf("empty providers file")
-	}
-	
-	// Skip header row
-	for i := 1; i < len(records); i++ {
-		provider, err := a.parseProviderRecord(records[i])
-		if err != nil {
-			a.logger.Warnf("Failed to parse provider record %d: %v", i, err)
+	for _, provider := range ps.providers {
+		if !provider.Enabled {
 			continue
 		}
-		a.providers = append(a.providers, provider)
+		
+		score := ps.calculateProviderScore(provider, complexity)
+		scores[provider.ID] = score
 	}
 	
-	a.logger.Infof("Loaded %d providers from %s", len(a.providers), a.providersFile)
-	return nil
-}
-
-// parseProviderRecord parses a 6-column CSV record into a Provider struct
-func (a *AdaptiveProviderSelector) parseProviderRecord(record []string) (*Provider, error) {
-	if len(record) < 6 {
-		return nil, fmt.Errorf("insufficient columns: expected 6 columns (Name,Tier,Base_URL,APIKey,Models,Other), got %d", len(record))
+	if len(scores) == 0 {
+		return nil, fmt.Errorf("no enabled providers available")
 	}
 	
-	provider := &Provider{
-		Name:    strings.TrimSpace(record[0]), // Column 1: Name
-		Tier:    ProviderTier(strings.ToLower(strings.TrimSpace(record[1]))), // Column 2: Tier
-		BaseURL: strings.TrimSpace(record[2]), // Column 3: Base_URL
-		APIKey:  strings.TrimSpace(record[3]), // Column 4: APIKey  
-		Models:  strings.TrimSpace(record[4]), // Column 5: Model(s)
-		Other:   strings.TrimSpace(record[5]), // Column 6: Other
-		Metrics: ProviderMetrics{
-			SuccessRate:      0.9, // Default values
-			AverageLatency:   1000.0,
-			QualityScore:     0.8,
-			CostEfficiency:   0.7,
-			LastUpdated:      time.Now(),
-			RequestCount:     0,
-			ErrorCount:       0,
-			AverageCost:      0.001, // Default cost
-			ReliabilityScore: 0.8,
-		},
-	}
+	// Find the best provider
+	var bestProvider *Provider
+	var bestScore float64
 	
-	return provider, nil
-}
-
-// SelectOptimalProvider selects the optimal provider for a task
-func (a *AdaptiveProviderSelector) SelectOptimalProvider(ctx context.Context, taskID string, complexity TaskComplexity, requirements map[string]interface{}) (ProviderAssignment, error) {
-	a.logger.Infof("Selecting optimal provider for task %s (complexity: %.2f)", taskID, complexity.Score)
-	
-	a.providersMutex.RLock()
-	defer a.providersMutex.RUnlock()
-	
-	if len(a.providers) == 0 {
-		return ProviderAssignment{}, fmt.Errorf("no providers available")
-	}
-	
-	// Calculate scores for all providers
-	scores := make([]ProviderScore, 0, len(a.providers))
-	for _, provider := range a.providers {
-		score := a.calculateProviderScore(provider, complexity, requirements)
-		scores = append(scores, ProviderScore{
-			Provider: provider,
-			Score:    score,
-		})
-	}
-	
-	// Sort by score (highest first)
-	for i := 0; i < len(scores)-1; i++ {
-		for j := i + 1; j < len(scores); j++ {
-			if scores[i].Score < scores[j].Score {
-				scores[i], scores[j] = scores[j], scores[i]
-			}
+	for _, provider := range ps.providers {
+		if score, exists := scores[provider.ID]; exists && score > bestScore {
+			bestProvider = provider
+			bestScore = score
 		}
 	}
 	
-	// Select the best provider
-	bestProvider := scores[0].Provider
-	
-	// Create alternatives list
-	alternatives := make([]AlternativeProvider, 0, min(3, len(scores)-1))
-	for i := 1; i < min(4, len(scores)); i++ {
-		alternatives = append(alternatives, AlternativeProvider{
-			ProviderID:    scores[i].Provider.Name, // Use Name as ID
-			ProviderName:  scores[i].Provider.Name,
-			Confidence:    scores[i].Score,
-			EstimatedCost: a.estimateTaskCost(scores[i].Provider, complexity),
-			Reasoning:     fmt.Sprintf("Alternative option with score %.2f", scores[i].Score),
-		})
+	if bestProvider == nil {
+		return nil, fmt.Errorf("failed to select provider")
 	}
 	
-	assignment := ProviderAssignment{
-		TaskID:        taskID,
-		ProviderID:    bestProvider.Name, // Use Name as ID
+	// Select the best model for this provider
+	model := ps.selectBestModel(bestProvider, complexity)
+	
+	// Calculate estimated cost and time
+	estimatedCost := ps.calculateEstimatedCost(bestProvider, input.Query)
+	estimatedTime := ps.calculateEstimatedTime(bestProvider, complexity)
+	
+	// Generate alternatives
+	alternatives := ps.generateAlternatives(bestProvider, complexity, scores)
+	
+	assignment := &ProviderAssignment{
+		Provider:      bestProvider.ID,
+		Model:         model,
+		Reasoning:     ps.generateReasoning(bestProvider, complexity, bestScore),
+		Confidence:    bestScore / 4.0, // Normalize to 0-1
+		EstimatedCost: estimatedCost,
+		EstimatedTime: estimatedTime,
+		Alternatives:  alternatives,
 		ProviderName:  bestProvider.Name,
 		ProviderTier:  bestProvider.Tier,
-		Confidence:    scores[0].Score,
-		EstimatedCost: a.estimateTaskCost(bestProvider, complexity),
-		EstimatedTime: int64(a.estimateTaskTime(bestProvider, complexity)),
-		Reasoning:     a.generateSelectionReasoning(bestProvider, complexity, scores[0].Score),
-		Alternatives:  alternatives,
-		Metadata:      make(map[string]interface{}),
+		Tier:          bestProvider.Tier,
 	}
 	
-	a.logger.Infof("Selected provider %s for task %s with confidence %.2f", 
-		bestProvider.Name, taskID, scores[0].Score)
+	log.Printf("Selected provider: %s (score: %.2f) for task with complexity: %.2f", 
+		bestProvider.Name, bestScore, complexity.Overall)
 	
 	return assignment, nil
 }
 
-// UpdateProviderMetrics updates provider performance metrics
-func (a *AdaptiveProviderSelector) UpdateProviderMetrics(ctx context.Context, providerID string, success bool, cost, latency, quality float64) {
-	a.providersMutex.Lock()
-	defer a.providersMutex.Unlock()
+// calculateProviderScore calculates a score for a provider based on task complexity
+func (ps *ProviderSelector) calculateProviderScore(provider *Provider, complexity *TaskComplexity) float64 {
+	score := 0.0
 	
-	for _, provider := range a.providers {
-		if provider.Name == providerID {
-			provider.Metrics.TotalRequests++
-			if success {
-				provider.Metrics.SuccessfulRequests++
-			} else {
-				provider.Metrics.FailedRequests++
-			}
-			
-			// Update running averages
-			if provider.Metrics.TotalRequests > 0 {
-				provider.Metrics.SuccessRate = float64(provider.Metrics.SuccessfulRequests) / float64(provider.Metrics.TotalRequests)
-			}
-			provider.Metrics.AverageLatency = (provider.Metrics.AverageLatency + latency) / 2
-			provider.Metrics.AverageCost = (provider.Metrics.AverageCost + cost) / 2
-			provider.Metrics.QualityScore = (provider.Metrics.QualityScore + quality) / 2
-			provider.Metrics.LastUpdated = time.Now()
-			
-			a.logger.Infof("Updated metrics for provider %s: success_rate=%.2f, avg_cost=%.6f", 
-				provider.Name, provider.Metrics.SuccessRate, provider.Metrics.AverageCost)
-			break
-		}
-	}
-}
-
-// ProviderScore represents a provider with its calculated score
-type ProviderScore struct {
-	Provider *Provider
-	Score    float64
-}
-
-// calculateProviderScore calculates a score for a provider based on task requirements
-func (a *AdaptiveProviderSelector) calculateProviderScore(provider *Provider, complexity TaskComplexity, requirements map[string]interface{}) float64 {
-	// Base score from provider tier
-	tierScore := a.getTierScore(provider.Tier)
+	// Base score from provider priority
+	score += float64(provider.Priority) * 0.1
 	
-	// Cost efficiency score (assume default cost per token)
-	defaultCostPerToken := 0.001
-	costScore := 1.0 - (defaultCostPerToken / 0.001) // Normalize against typical max cost
-	if costScore < 0 {
-		costScore = 0
-	}
-	
-	// Performance score from metrics
-	performanceScore := provider.Metrics.QualityScore
-	
-	// Latency score (lower latency is better)
-	latencyScore := 1.0 - (provider.Metrics.AverageLatency / 5000.0) // Normalize against 5s max
-	if latencyScore < 0 {
-		latencyScore = 0
-	}
-	
-	// Reliability score
-	reliabilityScore := provider.Metrics.ReliabilityScore
-	
-	// Complexity alignment score
-	complexityScore := a.getComplexityAlignmentScore(provider, complexity)
-	
-	// Weighted final score
-	finalScore := a.costWeight*costScore +
-		a.performanceWeight*performanceScore +
-		a.latencyWeight*latencyScore +
-		a.reliabilityWeight*reliabilityScore +
-		0.2*tierScore +
-		0.1*complexityScore
-	
-	return finalScore
-}
-
-// getTierScore returns a score based on provider tier
-func (a *AdaptiveProviderSelector) getTierScore(tier ProviderTier) float64 {
-	switch tier {
-	case OfficialTier:
-		return 1.0
-	case CommunityTier:
-		return 0.7
-	case UnofficialTier:
-		return 0.4
+	// Tier-based scoring
+	switch strings.ToLower(provider.Tier) {
+	case "premium", "tier1":
+		score += 4.0
+	case "standard", "tier2":
+		score += 3.0
+	case "basic", "tier3":
+		score += 2.0
 	default:
-		return 0.5
+		score += 1.0
 	}
-}
-
-// getComplexityAlignmentScore returns a score based on how well the provider aligns with task complexity
-func (a *AdaptiveProviderSelector) getComplexityAlignmentScore(provider *Provider, complexity TaskComplexity) float64 {
-	// Higher complexity tasks should prefer higher-tier providers
-	if complexity.Overall >= High && provider.Tier == OfficialTier {
-		return 1.0
-	} else if complexity.Overall >= Medium && provider.Tier == CommunityTier {
-		return 0.8
-	} else if complexity.Overall <= Medium && provider.Tier == UnofficialTier {
-		return 0.6
-	}
-	return 0.5
-}
-
-// estimateTaskCost estimates the cost for a task with a given provider
-func (a *AdaptiveProviderSelector) estimateTaskCost(provider *Provider, complexity TaskComplexity) float64 {
-	// Estimate tokens based on complexity
-	estimatedTokens := 100.0 // Base tokens
 	
-	switch complexity.Overall {
+	// Complexity matching - prefer higher tier providers for complex tasks
+	complexityLevel := FloatToComplexityLevel(complexity.Overall)
+	switch complexityLevel {
 	case VeryHigh:
-		estimatedTokens = 2000.0
+		if strings.ToLower(provider.Tier) == "premium" {
+			score += 2.0
+		}
 	case High:
-		estimatedTokens = 1000.0
+		if strings.ToLower(provider.Tier) == "premium" || strings.ToLower(provider.Tier) == "standard" {
+			score += 1.5
+		}
 	case Medium:
-		estimatedTokens = 500.0
+		if strings.ToLower(provider.Tier) == "standard" || strings.ToLower(provider.Tier) == "basic" {
+			score += 1.0
+		}
 	case Low:
-		estimatedTokens = 200.0
+		score += 0.5 // Any provider can handle low complexity
 	}
 	
-	defaultCostPerToken := 0.001
-	return defaultCostPerToken * estimatedTokens
+	// Performance metrics (if available)
+	if provider.Metrics.SuccessRate > 0 {
+		score += provider.Metrics.SuccessRate * 2.0
+	}
+	
+	// Penalize high error rates
+	if provider.Metrics.ErrorRate > 0 {
+		score -= provider.Metrics.ErrorRate * 3.0
+	}
+	
+	// Consider latency (lower is better)
+	if provider.Metrics.AverageLatency > 0 {
+		latencyPenalty := float64(provider.Metrics.AverageLatency.Milliseconds()) / 1000.0
+		score -= latencyPenalty * 0.1
+	}
+	
+	// Health status bonus
+	if provider.HealthMetrics.Status == "healthy" {
+		score += 1.0
+	}
+	
+	return math.Max(0, score) // Ensure non-negative score
 }
 
-// estimateTaskTime estimates the time for a task with a given provider
-func (a *AdaptiveProviderSelector) estimateTaskTime(provider *Provider, complexity TaskComplexity) int {
-	baseTime := int(provider.Metrics.AverageLatency) // Base latency in ms
+// selectBestModel selects the best model for a provider based on complexity
+func (ps *ProviderSelector) selectBestModel(provider *Provider, complexity *TaskComplexity) string {
+	if len(provider.Models) == 0 {
+		return "default"
+	}
+	
+	// For now, just return the first model
+	// In a real implementation, this would consider model capabilities
+	return provider.Models[0]
+}
+
+// calculateEstimatedCost estimates the cost for processing the request
+func (ps *ProviderSelector) calculateEstimatedCost(provider *Provider, query string) float64 {
+	// Simple token estimation (rough approximation)
+	tokenCount := len(strings.Fields(query)) * 1.3 // Rough token estimate
+	
+	inputCost := tokenCount * provider.Pricing.InputTokenCost
+	outputCost := tokenCount * 0.5 * provider.Pricing.OutputTokenCost // Assume output is 50% of input
+	
+	return inputCost + outputCost
+}
+
+// calculateEstimatedTime estimates processing time
+func (ps *ProviderSelector) calculateEstimatedTime(provider *Provider, complexity *TaskComplexity) time.Duration {
+	baseTime := 1 * time.Second
 	
 	// Adjust based on complexity
-	complexityMultiplier := 1.0
-	switch complexity.Overall {
-	case VeryHigh:
-		complexityMultiplier = 2.0
-	case High:
-		complexityMultiplier = 1.5
-	case Medium:
-		complexityMultiplier = 1.2
-	case Low:
-		complexityMultiplier = 1.0
+	complexityMultiplier := complexity.Overall / 2.0
+	
+	// Adjust based on provider performance
+	if provider.Metrics.AverageLatency > 0 {
+		return time.Duration(float64(provider.Metrics.AverageLatency) * complexityMultiplier)
 	}
 	
-	return int(float64(baseTime) * complexityMultiplier)
+	return time.Duration(float64(baseTime) * complexityMultiplier)
 }
 
-// generateSelectionReasoning generates reasoning for provider selection
-func (a *AdaptiveProviderSelector) generateSelectionReasoning(provider *Provider, complexity TaskComplexity, score float64) string {
-	return fmt.Sprintf("Selected %s (tier: %s) based on optimal balance of cost, "+
-		"quality score (%.2f), and complexity alignment for %s complexity task. Overall score: %.2f",
-		provider.Name, provider.Tier, provider.Metrics.QualityScore, complexity.Overall, score)
-}
-
-// GetProviders returns all available providers
-func (a *AdaptiveProviderSelector) GetProviders() []*Provider {
-	a.providersMutex.RLock()
-	defer a.providersMutex.RUnlock()
+// generateAlternatives generates alternative provider options
+func (ps *ProviderSelector) generateAlternatives(selectedProvider *Provider, complexity *TaskComplexity, scores map[string]float64) []AlternativeProvider {
+	var alternatives []AlternativeProvider
 	
-	// Return a copy to prevent external modification
-	providers := make([]*Provider, len(a.providers))
-	copy(providers, a.providers)
-	return providers
+	// Sort providers by score
+	type providerScore struct {
+		provider *Provider
+		score    float64
+	}
+	
+	var sortedProviders []providerScore
+	for _, provider := range ps.providers {
+		if provider.ID != selectedProvider.ID && provider.Enabled {
+			if score, exists := scores[provider.ID]; exists {
+				sortedProviders = append(sortedProviders, providerScore{provider, score})
+			}
+		}
+	}
+	
+	sort.Slice(sortedProviders, func(i, j int) bool {
+		return sortedProviders[i].score > sortedProviders[j].score
+	})
+	
+	// Take top 3 alternatives
+	maxAlternatives := 3
+	if len(sortedProviders) < maxAlternatives {
+		maxAlternatives = len(sortedProviders)
+	}
+	
+	for i := 0; i < maxAlternatives; i++ {
+		provider := sortedProviders[i].provider
+		alternatives = append(alternatives, AlternativeProvider{
+			Provider:      provider.ID,
+			Model:         ps.selectBestModel(provider, complexity),
+			Confidence:    sortedProviders[i].score / 4.0,
+			EstimatedCost: ps.calculateEstimatedCost(provider, ""),
+			EstimatedTime: ps.calculateEstimatedTime(provider, complexity),
+			Reasoning:     fmt.Sprintf("Alternative option with score %.2f", sortedProviders[i].score),
+			ProviderID:    provider.ID,
+			ProviderName:  provider.Name,
+		})
+	}
+	
+	return alternatives
+}
+
+// generateReasoning generates reasoning for provider selection
+func (ps *ProviderSelector) generateReasoning(provider *Provider, complexity *TaskComplexity, score float64) string {
+	complexityLevel := FloatToComplexityLevel(complexity.Overall)
+	
+	reasoning := fmt.Sprintf("Selected %s (tier: %s) with score %.2f for %s complexity task. ", 
+		provider.Name, provider.Tier, score, complexityLevel)
+	
+	if provider.Metrics.SuccessRate > 0.9 {
+		reasoning += "High success rate. "
+	}
+	
+	if provider.HealthMetrics.Status == "healthy" {
+		reasoning += "Provider is healthy. "
+	}
+	
+	return reasoning
 }

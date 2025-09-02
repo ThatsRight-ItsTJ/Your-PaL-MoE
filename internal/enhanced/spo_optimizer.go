@@ -3,398 +3,215 @@ package enhanced
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
+	"log"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
-// SPOOptimizer implements self-supervised prompt optimization
-type SPOOptimizer struct {
-	logger *logrus.Logger
-	
-	// Configuration
-	maxIterations   int
-	samplesPerRound int
-	convergenceRate float64
-	learningRate    float64
-	cacheSize       int
-	cacheTTL        time.Duration
-	
-	// Cache for optimization results
-	cache      map[string]*CachedOptimization
-	cacheMutex sync.RWMutex
-	
-	// Performance tracking
-	optimizationHistory map[string][]OptimizationAttempt
-	historyMutex       sync.RWMutex
-}
+// OptimizePrompt optimizes a prompt for better performance and cost efficiency
+func (spo *SPOOptimizer) OptimizePrompt(ctx context.Context, input RequestInput, complexity *TaskComplexity) (*OptimizedPrompt, error) {
+	if input.Query == "" {
+		return nil, fmt.Errorf("empty query provided")
+	}
 
-// CachedOptimization represents a cached optimization result
-type CachedOptimization struct {
-	Original     string
-	Optimized    string
-	Score        float64
-	Improvements []string
-	Timestamp    time.Time
-	HitCount     int
-}
-
-// OptimizationAttempt tracks individual optimization attempts
-type OptimizationAttempt struct {
-	Original      string
-	Optimized     string
-	Score         float64
-	Iteration     int
-	Improvements  []string
-	ExecutionTime time.Duration
-	Timestamp     time.Time
-}
-
-// NewSPOOptimizer creates a new SPO optimizer
-func NewSPOOptimizer(logger *logrus.Logger) (*SPOOptimizer, error) {
-	optimizer := &SPOOptimizer{
-		logger:              logger,
-		maxIterations:       10,
-		samplesPerRound:     3,
-		convergenceRate:     0.05,
-		learningRate:        0.1,
-		cacheSize:           1000,
-		cacheTTL:            time.Hour,
-		cache:               make(map[string]*CachedOptimization),
-		optimizationHistory: make(map[string][]OptimizationAttempt),
+	originalPrompt := input.Query
+	optimizedText := spo.performOptimization(originalPrompt, complexity)
+	
+	// Calculate token reduction
+	originalTokens := spo.estimateTokens(originalPrompt)
+	optimizedTokens := spo.estimateTokens(optimizedText)
+	tokenReduction := originalTokens - optimizedTokens
+	
+	// Calculate cost savings (rough estimate)
+	costSavings := spo.calculateCostSavings(tokenReduction)
+	
+	reasoning := spo.generateOptimizationReasoning(originalPrompt, optimizedText, complexity)
+	
+	result := &OptimizedPrompt{
+		OriginalPrompt: originalPrompt,
+		OptimizedText:  optimizedText,
+		Reasoning:      reasoning,
+		TokenReduction: tokenReduction,
+		CostSavings:    costSavings,
 	}
 	
-	// Start cache cleanup routine
-	go optimizer.cacheCleanupRoutine()
-	
-	return optimizer, nil
-}
-
-// OptimizePrompt optimizes a prompt using SPO methodology
-func (s *SPOOptimizer) OptimizePrompt(ctx context.Context, originalPrompt string, complexity TaskComplexity) (OptimizedPrompt, error) {
-	startTime := time.Now()
-	s.logger.Infof("Starting SPO optimization for prompt (complexity: %.2f)", complexity.Score)
-	
-	// Check cache first
-	cacheKey := s.generateCacheKey(originalPrompt, complexity)
-	if cached := s.getFromCache(cacheKey); cached != nil {
-		s.logger.Infof("Cache hit for prompt optimization")
-		return OptimizedPrompt{
-			Original:     originalPrompt,
-			Optimized:    cached.Optimized,
-			Improvements: cached.Improvements,
-			Confidence:   cached.Score,
-			CostSavings:  s.estimateCostSavings(cached.Score),
-		}, nil
-	}
-	
-	// Perform optimization
-	result, err := s.performOptimization(ctx, originalPrompt, complexity)
-	if err != nil {
-		return OptimizedPrompt{}, fmt.Errorf("optimization failed: %w", err)
-	}
-	
-	// Cache the result
-	s.cacheResult(cacheKey, result)
-	
-	// Track optimization attempt
-	attempt := OptimizationAttempt{
-		Original:      originalPrompt,
-		Optimized:     result.Optimized,
-		Score:         result.Confidence,
-		Iteration:     s.maxIterations, // Use maxIterations instead of result.Iterations
-		Improvements:  result.Improvements,
-		ExecutionTime: time.Since(startTime),
-		Timestamp:     time.Now(),
-	}
-	s.trackOptimization(originalPrompt, attempt)
-	
-	s.logger.Infof("SPO optimization completed in %v with confidence %.2f", 
-		time.Since(startTime), result.Confidence)
+	log.Printf("Prompt optimization: %d tokens reduced, $%.4f cost savings", tokenReduction, costSavings)
 	
 	return result, nil
 }
 
-// performOptimization performs the actual SPO optimization process
-func (s *SPOOptimizer) performOptimization(ctx context.Context, original string, complexity TaskComplexity) (OptimizedPrompt, error) {
-	currentPrompt := original
-	bestPrompt := original
-	bestScore := 0.0
-	improvements := make([]string, 0)
+// performOptimization performs the actual prompt optimization
+func (spo *SPOOptimizer) performOptimization(prompt string, complexity *TaskComplexity) string {
+	optimized := prompt
 	
-	for iteration := 0; iteration < s.maxIterations; iteration++ {
-		s.logger.Debugf("SPO iteration %d/%d", iteration+1, s.maxIterations)
-		
-		// Generate variants of the current prompt
-		variants := s.generatePromptVariants(currentPrompt, complexity, s.samplesPerRound)
-		
-		// Evaluate variants using pairwise comparison
-		scores := s.evaluateVariants(variants, complexity)
-		
-		// Find the best variant
-		bestVariantIndex := 0
-		bestVariantScore := scores[0]
-		for i, score := range scores {
-			if score > bestVariantScore {
-				bestVariantScore = score
-				bestVariantIndex = i
-			}
+	// Remove redundant words and phrases
+	optimized = spo.removeRedundancy(optimized)
+	
+	// Simplify based on complexity
+	if complexity.Overall < 2.5 {
+		optimized = spo.simplifyForLowComplexity(optimized)
+	} else if complexity.Overall > 3.5 {
+		optimized = spo.enhanceForHighComplexity(optimized)
+	}
+	
+	// Apply general optimizations
+	optimized = spo.applyGeneralOptimizations(optimized)
+	
+	return optimized
+}
+
+// removeRedundancy removes redundant words and phrases
+func (spo *SPOOptimizer) removeRedundancy(text string) string {
+	// Remove common redundant phrases
+	redundantPhrases := []string{
+		"please ", "could you ", "would you ", "can you ",
+		"I would like ", "I want ", "I need ",
+	}
+	
+	result := text
+	for _, phrase := range redundantPhrases {
+		result = strings.ReplaceAll(result, phrase, "")
+	}
+	
+	return strings.TrimSpace(result)
+}
+
+// simplifyForLowComplexity simplifies prompts for low complexity tasks
+func (spo *SPOOptimizer) simplifyForLowComplexity(text string) string {
+	// For low complexity tasks, we can be more direct
+	simplified := text
+	
+	// Remove unnecessary qualifiers
+	qualifiers := []string{
+		"very ", "quite ", "rather ", "somewhat ", "fairly ",
+	}
+	
+	for _, qualifier := range qualifiers {
+		simplified = strings.ReplaceAll(simplified, qualifier, "")
+	}
+	
+	return simplified
+}
+
+// enhanceForHighComplexity enhances prompts for high complexity tasks
+func (spo *SPOOptimizer) enhanceForHighComplexity(text string) string {
+	// For high complexity tasks, we might need to add structure
+	enhanced := text
+	
+	// Add thinking prompts for complex reasoning
+	if strings.Contains(strings.ToLower(text), "analyze") || strings.Contains(strings.ToLower(text), "compare") {
+		enhanced = "Think step by step. " + enhanced
+	}
+	
+	return enhanced
+}
+
+// applyGeneralOptimizations applies general optimization rules
+func (spo *SPOOptimizer) applyGeneralOptimizations(text string) string {
+	optimized := text
+	
+	// Remove extra whitespace
+	optimized = strings.Join(strings.Fields(optimized), " ")
+	
+	// Ensure proper capitalization
+	if len(optimized) > 0 {
+		optimized = strings.ToUpper(string(optimized[0])) + optimized[1:]
+	}
+	
+	return optimized
+}
+
+// estimateTokens estimates the number of tokens in text
+func (spo *SPOOptimizer) estimateTokens(text string) int {
+	// Rough estimation: 1 token per 4 characters on average
+	return len(text) / 4
+}
+
+// calculateCostSavings calculates estimated cost savings from token reduction
+func (spo *SPOOptimizer) calculateCostSavings(tokenReduction int) float64 {
+	// Assume average cost per token (rough estimate)
+	avgCostPerToken := 0.00002 // $0.00002 per token
+	return float64(tokenReduction) * avgCostPerToken
+}
+
+// generateOptimizationReasoning generates reasoning for the optimization
+func (spo *SPOOptimizer) generateOptimizationReasoning(original, optimized string, complexity *TaskComplexity) string {
+	reasoning := "Prompt optimization applied: "
+	
+	if len(optimized) < len(original) {
+		reduction := len(original) - len(optimized)
+		reasoning += fmt.Sprintf("Reduced length by %d characters. ", reduction)
+	}
+	
+	complexityLevel := FloatToComplexityLevel(complexity.Overall)
+	switch complexityLevel {
+	case VeryHigh:
+		reasoning += "Enhanced for high complexity task with structured thinking prompts."
+	case High:
+		reasoning += "Optimized for high complexity while maintaining clarity."
+	case Medium:
+		reasoning += "Balanced optimization for medium complexity task."
+	case Low:
+		reasoning += "Simplified for straightforward low complexity task."
+	}
+	
+	return reasoning
+}
+
+// AnalyzePromptComplexity analyzes the complexity of a prompt
+func (spo *SPOOptimizer) AnalyzePromptComplexity(prompt string) *TaskComplexity {
+	// This is a simplified version - in practice, this would use more sophisticated analysis
+	score := 1.0
+	
+	// Check for complexity indicators
+	complexityIndicators := []string{
+		"analyze", "compare", "evaluate", "synthesize", "explain",
+		"detailed", "comprehensive", "step by step", "reasoning",
+	}
+	
+	for _, indicator := range complexityIndicators {
+		if strings.Contains(strings.ToLower(prompt), indicator) {
+			score += 0.5
 		}
-		
-		// Check for improvement
-		if bestVariantScore > bestScore {
-			improvement := s.identifyImprovement(currentPrompt, variants[bestVariantIndex])
-			improvements = append(improvements, improvement)
-			
-			bestPrompt = variants[bestVariantIndex]
-			bestScore = bestVariantScore
-			currentPrompt = bestPrompt
-			
-			s.logger.Debugf("Improvement found in iteration %d: score %.2f", iteration+1, bestScore)
-		} else {
-			// No improvement, check for convergence
-			if s.hasConverged(bestScore, s.convergenceRate) {
-				s.logger.Debugf("Convergence reached after %d iterations", iteration+1)
-				break
-			}
-		}
 	}
 	
-	return OptimizedPrompt{
-		Original:     original,
-		Optimized:    bestPrompt,
-		Improvements: improvements,
-		Confidence:   bestScore,
-		CostSavings:  s.estimateCostSavings(bestScore),
-	}, nil
-}
-
-// generatePromptVariants generates variants of a prompt for optimization
-func (s *SPOOptimizer) generatePromptVariants(prompt string, complexity TaskComplexity, count int) []string {
-	variants := make([]string, count)
-	
-	for i := 0; i < count; i++ {
-		variant := s.applyOptimizationStrategy(prompt, complexity, i)
-		variants[i] = variant
+	if score > 4.0 {
+		score = 4.0
 	}
 	
-	return variants
-}
-
-// applyOptimizationStrategy applies different optimization strategies
-func (s *SPOOptimizer) applyOptimizationStrategy(prompt string, complexity TaskComplexity, strategyIndex int) string {
-	strategies := []func(string, TaskComplexity) string{
-		s.addClarificationStrategy,
-		s.addStructureStrategy,
-		s.addContextStrategy,
-		s.addConstraintsStrategy,
-		s.addExamplesStrategy,
+	return &TaskComplexity{
+		Overall: score,
+		Score:   score,
+		Reasoning: score,
+		Knowledge: score,
+		Computation: score,
+		Coordination: score,
 	}
-	
-	strategy := strategies[strategyIndex%len(strategies)]
-	return strategy(prompt, complexity)
 }
 
-// Strategy implementations
-func (s *SPOOptimizer) addClarificationStrategy(prompt string, complexity TaskComplexity) string {
-	if complexity.Overall >= Medium {
-		return prompt + "\n\nPlease be specific and detailed in your response."
-	}
-	return prompt + "\n\nPlease provide a clear and concise response."
-}
-
-func (s *SPOOptimizer) addStructureStrategy(prompt string, complexity TaskComplexity) string {
-	if complexity.Overall >= High {
-		return prompt + "\n\nPlease structure your response with clear headings and bullet points where appropriate."
-	}
-	return prompt + "\n\nPlease organize your response clearly."
-}
-
-func (s *SPOOptimizer) addContextStrategy(prompt string, complexity TaskComplexity) string {
-	if complexity.Knowledge >= High {
-		return prompt + "\n\nConsider relevant background information and context in your response."
-	}
-	return prompt + "\n\nProvide relevant context as needed."
-}
-
-func (s *SPOOptimizer) addConstraintsStrategy(prompt string, complexity TaskComplexity) string {
-	return prompt + "\n\nEnsure your response is accurate, helpful, and appropriate."
-}
-
-func (s *SPOOptimizer) addExamplesStrategy(prompt string, complexity TaskComplexity) string {
-	if complexity.Overall >= Medium {
-		return prompt + "\n\nInclude relevant examples to illustrate your points."
-	}
+// OptimizeForProvider optimizes a prompt for a specific provider
+func (spo *SPOOptimizer) OptimizeForProvider(prompt string, providerID string) string {
+	// Provider-specific optimizations could be added here
+	// For now, just return the original prompt
 	return prompt
 }
 
-// evaluateVariants evaluates prompt variants using pairwise comparison
-func (s *SPOOptimizer) evaluateVariants(variants []string, complexity TaskComplexity) []float64 {
-	scores := make([]float64, len(variants))
+// BatchOptimize optimizes multiple prompts at once
+func (spo *SPOOptimizer) BatchOptimize(ctx context.Context, prompts []string) ([]*OptimizedPrompt, error) {
+	var results []*OptimizedPrompt
 	
-	for i, variant := range variants {
-		score := s.calculatePromptQuality(variant, complexity)
-		scores[i] = score
-	}
-	
-	return scores
-}
-
-// calculatePromptQuality calculates the quality score of a prompt
-func (s *SPOOptimizer) calculatePromptQuality(prompt string, complexity TaskComplexity) float64 {
-	score := 0.0
-	
-	// Base score from prompt length and structure
-	words := strings.Fields(prompt)
-	if len(words) >= 10 && len(words) <= 100 {
-		score += 0.3 // Good length
-	}
-	
-	// Clarity indicators
-	clarityWords := []string{"specific", "detailed", "clear", "please", "exactly"}
-	for _, word := range clarityWords {
-		if strings.Contains(strings.ToLower(prompt), word) {
-			score += 0.1
+	for _, prompt := range prompts {
+		input := RequestInput{Query: prompt}
+		complexity := spo.AnalyzePromptComplexity(prompt)
+		
+		optimized, err := spo.OptimizePrompt(ctx, input, complexity)
+		if err != nil {
+			log.Printf("Failed to optimize prompt: %v", err)
+			continue
 		}
+		
+		results = append(results, optimized)
 	}
 	
-	// Structure indicators
-	if strings.Contains(prompt, "\n") {
-		score += 0.2 // Has structure
-	}
-	
-	// Context indicators
-	contextWords := []string{"context", "background", "relevant", "consider"}
-	for _, word := range contextWords {
-		if strings.Contains(strings.ToLower(prompt), word) {
-			score += 0.1
-		}
-	}
-	
-	// Complexity alignment
-	if complexity.Overall >= High && len(words) >= 20 {
-		score += 0.2 // Complex tasks need detailed prompts
-	}
-	
-	// Normalize score to 0-1 range
-	if score > 1.0 {
-		score = 1.0
-	}
-	
-	return score
-}
-
-// Helper methods
-func (s *SPOOptimizer) identifyImprovement(original, optimized string) string {
-	if len(optimized) > int(float64(len(original))*1.2) {
-		return "Added detailed guidance"
-	} else if strings.Contains(optimized, "\n") && !strings.Contains(original, "\n") {
-		return "Improved structure"
-	} else if strings.Contains(strings.ToLower(optimized), "specific") {
-		return "Enhanced clarity"
-	}
-	return "General optimization"
-}
-
-func (s *SPOOptimizer) hasConverged(score float64, threshold float64) bool {
-	return score >= (1.0 - threshold)
-}
-
-func (s *SPOOptimizer) estimateCostSavings(score float64) float64 {
-	return score * 0.3 // Up to 30% cost savings
-}
-
-// Cache management methods
-func (s *SPOOptimizer) generateCacheKey(prompt string, complexity TaskComplexity) string {
-	h := fnv.New64a()
-	h.Write([]byte(prompt))
-	h.Write([]byte(fmt.Sprintf("%.2f", complexity.Score)))
-	return fmt.Sprintf("%x", h.Sum64())
-}
-
-func (s *SPOOptimizer) getFromCache(key string) *CachedOptimization {
-	s.cacheMutex.RLock()
-	defer s.cacheMutex.RUnlock()
-	
-	if cached, exists := s.cache[key]; exists {
-		if time.Since(cached.Timestamp) < s.cacheTTL {
-			cached.HitCount++
-			return cached
-		}
-		delete(s.cache, key)
-	}
-	return nil
-}
-
-func (s *SPOOptimizer) cacheResult(key string, result OptimizedPrompt) {
-	s.cacheMutex.Lock()
-	defer s.cacheMutex.Unlock()
-	
-	if len(s.cache) >= s.cacheSize {
-		s.evictLeastUsed()
-	}
-	
-	s.cache[key] = &CachedOptimization{
-		Original:     result.Original,
-		Optimized:    result.Optimized,
-		Score:        result.Confidence,
-		Improvements: result.Improvements,
-		Timestamp:    time.Now(),
-		HitCount:     0,
-	}
-}
-
-func (s *SPOOptimizer) evictLeastUsed() {
-	var leastUsedKey string
-	minHits := int(^uint(0) >> 1)
-	
-	for key, cached := range s.cache {
-		if cached.HitCount < minHits {
-			minHits = cached.HitCount
-			leastUsedKey = key
-		}
-	}
-	
-	if leastUsedKey != "" {
-		delete(s.cache, leastUsedKey)
-	}
-}
-
-func (s *SPOOptimizer) trackOptimization(prompt string, attempt OptimizationAttempt) {
-	s.historyMutex.Lock()
-	defer s.historyMutex.Unlock()
-	
-	key := fmt.Sprintf("%x", fnv.New64a().Sum([]byte(prompt)))
-	s.optimizationHistory[key] = append(s.optimizationHistory[key], attempt)
-	
-	if len(s.optimizationHistory[key]) > 10 {
-		s.optimizationHistory[key] = s.optimizationHistory[key][1:]
-	}
-}
-
-func (s *SPOOptimizer) cacheCleanupRoutine() {
-	ticker := time.NewTicker(10 * time.Minute)
-	defer ticker.Stop()
-	
-	for {
-		select {
-		case <-ticker.C:
-			s.cleanupExpiredEntries()
-		}
-	}
-}
-
-func (s *SPOOptimizer) cleanupExpiredEntries() {
-	s.cacheMutex.Lock()
-	defer s.cacheMutex.Unlock()
-	
-	now := time.Now()
-	for key, cached := range s.cache {
-		if now.Sub(cached.Timestamp) > s.cacheTTL {
-			delete(s.cache, key)
-		}
-	}
+	return results, nil
 }
