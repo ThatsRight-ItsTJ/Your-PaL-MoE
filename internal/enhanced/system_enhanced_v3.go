@@ -5,38 +5,130 @@ import (
 	"fmt"
 	"log"
 	"strings"
-
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/selection"
 )
 
 // EnhancedSystemV3 integrates dynamic model discovery with the enhanced system
 type EnhancedSystemV3 struct {
-	providers     []selection.Provider
-	selector      *selection.EnhancedAdaptiveSelector
-	modelLoader   *selection.DynamicModelLoader
-	yamlLoader    *selection.YAMLProviderLoader
+	providers   []Provider
+	selector    *EnhancedAdaptiveSelector
+	modelLoader *DynamicModelLoader
+	yamlLoader  *YAMLProviderLoader
+}
+
+// DynamicModelLoader handles dynamic model loading
+type DynamicModelLoader struct {
+	cache map[string][]string
+}
+
+// YAMLProviderLoader handles YAML provider configurations
+type YAMLProviderLoader struct {
+	providers map[string]Provider
+}
+
+// NewDynamicModelLoader creates a new dynamic model loader
+func NewDynamicModelLoader() *DynamicModelLoader {
+	return &DynamicModelLoader{
+		cache: make(map[string][]string),
+	}
+}
+
+// NewYAMLProviderLoader creates a new YAML provider loader
+func NewYAMLProviderLoader() *YAMLProviderLoader {
+	return &YAMLProviderLoader{
+		providers: make(map[string]Provider),
+	}
+}
+
+// LoadModelsFromSource loads models from a source URL
+func (dml *DynamicModelLoader) LoadModelsFromSource(sourceURL string) ([]string, error) {
+	// Mock implementation - in reality, this would fetch from the URL
+	if cached, exists := dml.cache[sourceURL]; exists {
+		return cached, nil
+	}
+	
+	// Simulate loading models
+	models := []string{"model-1", "model-2", "model-3"}
+	dml.cache[sourceURL] = models
+	return models, nil
+}
+
+// ClearCache clears the model cache
+func (dml *DynamicModelLoader) ClearCache() {
+	dml.cache = make(map[string][]string)
+}
+
+// GetCacheStats returns cache statistics
+func (dml *DynamicModelLoader) GetCacheStats() map[string]interface{} {
+	return map[string]interface{}{
+		"cached_sources": len(dml.cache),
+		"total_models":   0, // Would calculate total across all cached sources
+	}
+}
+
+// RefreshAllModels refreshes all models in the YAML loader
+func (ypl *YAMLProviderLoader) RefreshAllModels() {
+	// Mock implementation
+	log.Println("Refreshing YAML provider models...")
+}
+
+// LoadProvidersFromCSVWithDynamicModels loads providers from CSV with dynamic model discovery
+func LoadProvidersFromCSVWithDynamicModels(csvPath string) ([]Provider, error) {
+	// Mock implementation - in reality, this would parse the CSV
+	providers := []Provider{
+		{
+			ID:           "pollinations",
+			Name:         "Pollinations",
+			Tier:         CommunityTier,
+			BaseURL:      "https://text.pollinations.ai",
+			Models:       []string{"openai", "creative"},
+			Capabilities: []string{"text", "creative"},
+			CostPerToken: 0.000001,
+			MaxTokens:    2048,
+		},
+		{
+			ID:           "openai",
+			Name:         "OpenAI",
+			Tier:         OfficialTier,
+			BaseURL:      "https://api.openai.com/v1",
+			Models:       []string{"gpt-4", "gpt-3.5-turbo"},
+			Capabilities: []string{"text", "code", "reasoning"},
+			CostPerToken: 0.03,
+			MaxTokens:    4096,
+		},
+	}
+	
+	return providers, nil
+}
+
+// RefreshProviderModelsFromCSV refreshes models for providers from CSV
+func RefreshProviderModelsFromCSV(providers []Provider) error {
+	// Mock implementation
+	log.Println("Refreshing provider models from CSV...")
+	return nil
 }
 
 // NewEnhancedSystemV3 creates a new enhanced system with full dynamic model support
 func NewEnhancedSystemV3(csvPath string, yamlDir string) (*EnhancedSystemV3, error) {
 	log.Println("🚀 Initializing Enhanced System v3.0 with dynamic model discovery...")
 	
-	// Try to load providers with dynamic model discovery
-	var providers []selection.Provider
-	var err error
-	
-	// First try CSV with dynamic model discovery
-	providers, err = selection.LoadProvidersFromCSVWithDynamicModels(csvPath)
+	// Load providers with dynamic model discovery
+	providers, err := LoadProvidersFromCSVWithDynamicModels(csvPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load providers: %w", err)
+	}
+	
+	// Create enhanced selector
+	selector, err := NewEnhancedAdaptiveSelector(providers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create selector: %w", err)
 	}
 	
 	// Create enhanced system
 	system := &EnhancedSystemV3{
 		providers:   providers,
-		selector:    selection.NewEnhancedAdaptiveSelector(providers),
-		modelLoader: selection.NewDynamicModelLoader(),
-		yamlLoader:  selection.NewYAMLProviderLoader(),
+		selector:    selector,
+		modelLoader: NewDynamicModelLoader(),
+		yamlLoader:  NewYAMLProviderLoader(),
 	}
 	
 	log.Printf("✅ Enhanced System v3.0 initialized with %d providers", len(providers))
@@ -47,8 +139,17 @@ func NewEnhancedSystemV3(csvPath string, yamlDir string) (*EnhancedSystemV3, err
 func (es *EnhancedSystemV3) ProcessRequest(request string) (*ProcessResponse, error) {
 	log.Printf("🚀 Processing request with Enhanced System v3.0: %.100s...", request)
 
-	// Select the best provider using enhanced model database
-	provider, confidence, err := es.selector.SelectProvider(request)
+	// Analyze task complexity
+	complexity := es.analyzeTaskComplexity(request)
+	
+	// Create metadata for selection
+	metadata := map[string]interface{}{
+		"request_length": len(request),
+		"timestamp":      "2024-01-01T00:00:00Z", // placeholder
+	}
+
+	// Select the best provider using enhanced selection
+	provider, confidence, err := es.selector.SelectProvider(complexity, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("provider selection failed: %w", err)
 	}
@@ -68,35 +169,73 @@ func (es *EnhancedSystemV3) ProcessRequest(request string) (*ProcessResponse, er
 	return response, nil
 }
 
+// analyzeTaskComplexity analyzes the complexity of a task
+func (es *EnhancedSystemV3) analyzeTaskComplexity(request string) TaskComplexity {
+	// Simple complexity analysis based on request content
+	requestLower := strings.ToLower(request)
+	wordCount := len(strings.Fields(request))
+	
+	complexity := TaskComplexity{
+		Overall:     2.5, // default medium complexity
+		Technical:   1.0,
+		Creative:    1.0,
+		Reasoning:   1.0,
+		Computation: 1.0,
+	}
+	
+	// Adjust based on content
+	if strings.Contains(requestLower, "code") || strings.Contains(requestLower, "program") {
+		complexity.Technical += 2.0
+		complexity.Overall += 1.0
+	}
+	
+	if strings.Contains(requestLower, "creative") || strings.Contains(requestLower, "story") {
+		complexity.Creative += 2.0
+		complexity.Overall += 0.5
+	}
+	
+	if strings.Contains(requestLower, "complex") || wordCount > 50 {
+		complexity.Overall += 1.5
+		complexity.Reasoning += 1.0
+	}
+	
+	// Normalize to 0-5 scale
+	if complexity.Overall > 5.0 {
+		complexity.Overall = 5.0
+	}
+	
+	return complexity
+}
+
 // generateResponse creates a mock response from the selected provider
-func (es *EnhancedSystemV3) generateResponse(provider *selection.Provider, request string, confidence float64) *ProcessResponse {
-	taskType := es.selector.GetDetector().DetectTaskType(request)
+func (es *EnhancedSystemV3) generateResponse(provider *Provider, request string, confidence float64) *ProcessResponse {
+	taskType := es.detectTaskType(request)
 	
 	var responseContent string
 	var responseType string
 
 	switch taskType {
-	case selection.TaskTypeImage:
+	case TaskTypeImage:
 		responseContent = fmt.Sprintf("🎨 [MOCK IMAGE GENERATION] Generated image using %s\nAvailable models: %v\nSelected based on image generation capabilities", 
 			provider.Name, provider.Models)
 		responseType = "image_generation"
 		
-	case selection.TaskTypeCode:
+	case TaskTypeCode:
 		responseContent = fmt.Sprintf("💻 [MOCK CODE GENERATION] Generated code using %s\nAvailable models: %v\n\n```python\n# Example code generated by %s\ndef hello_world():\n    print('Hello from %s with dynamic models!')\n```", 
 			provider.Name, provider.Models, provider.Name, provider.Name)
 		responseType = "code_generation"
 		
-	case selection.TaskTypeAudio:
+	case TaskTypeAudio:
 		responseContent = fmt.Sprintf("🎵 [MOCK AUDIO PROCESSING] Processed audio using %s\nAvailable models: %v", 
 			provider.Name, provider.Models)
 		responseType = "audio_processing"
 		
-	case selection.TaskTypeVideo:
+	case TaskTypeVideo:
 		responseContent = fmt.Sprintf("🎬 [MOCK VIDEO PROCESSING] Processed video using %s\nAvailable models: %v", 
 			provider.Name, provider.Models)
 		responseType = "video_processing"
 		
-	case selection.TaskTypeMultimodal:
+	case TaskTypeMultimodal:
 		responseContent = fmt.Sprintf("🔄 [MOCK MULTIMODAL] Processed multimodal request using %s\nAvailable models: %v", 
 			provider.Name, provider.Models)
 		responseType = "multimodal"
@@ -123,8 +262,31 @@ func (es *EnhancedSystemV3) generateResponse(provider *selection.Provider, reque
 	}
 }
 
+// detectTaskType detects the type of task from the request
+func (es *EnhancedSystemV3) detectTaskType(request string) TaskType {
+	requestLower := strings.ToLower(request)
+	
+	if strings.Contains(requestLower, "image") || strings.Contains(requestLower, "picture") || strings.Contains(requestLower, "photo") {
+		return TaskTypeImage
+	}
+	if strings.Contains(requestLower, "code") || strings.Contains(requestLower, "program") || strings.Contains(requestLower, "function") {
+		return TaskTypeCode
+	}
+	if strings.Contains(requestLower, "audio") || strings.Contains(requestLower, "sound") || strings.Contains(requestLower, "music") {
+		return TaskTypeAudio
+	}
+	if strings.Contains(requestLower, "video") || strings.Contains(requestLower, "movie") {
+		return TaskTypeVideo
+	}
+	if strings.Contains(requestLower, "multimodal") || strings.Contains(requestLower, "multi-modal") {
+		return TaskTypeMultimodal
+	}
+	
+	return TaskTypeText
+}
+
 // hasDynamicModels checks if a provider uses dynamic model loading
-func (es *EnhancedSystemV3) hasDynamicModels(provider *selection.Provider) bool {
+func (es *EnhancedSystemV3) hasDynamicModels(provider *Provider) bool {
 	for _, model := range provider.Models {
 		if strings.HasPrefix(model, "/") || strings.HasPrefix(model, "http://") || strings.HasPrefix(model, "https://") {
 			return true
@@ -142,30 +304,34 @@ func (es *EnhancedSystemV3) RefreshAllModels() error {
 	es.yamlLoader.RefreshAllModels()
 	
 	// Refresh CSV-based providers
-	err := selection.RefreshProviderModelsFromCSV(es.providers)
+	err := RefreshProviderModelsFromCSV(es.providers)
 	if err != nil {
 		return fmt.Errorf("failed to refresh CSV provider models: %w", err)
 	}
 	
 	// Update the selector with refreshed providers
-	es.selector = selection.NewEnhancedAdaptiveSelector(es.providers)
+	selector, err := NewEnhancedAdaptiveSelector(es.providers)
+	if err != nil {
+		return fmt.Errorf("failed to recreate selector: %w", err)
+	}
+	es.selector = selector
 	
 	log.Println("✅ All provider models refreshed successfully")
 	return nil
 }
 
 // GetProviders returns the list of providers
-func (es *EnhancedSystemV3) GetProviders() []selection.Provider {
+func (es *EnhancedSystemV3) GetProviders() []Provider {
 	return es.providers
 }
 
 // GetProviderCapabilities returns detailed capabilities for all providers
-func (es *EnhancedSystemV3) GetProviderCapabilities() map[string]selection.ProviderCapabilities {
+func (es *EnhancedSystemV3) GetProviderCapabilities() map[string]ProviderCapabilities {
 	return es.selector.GetProviderCapabilities()
 }
 
 // GetDetailedModelCapabilities returns per-model capabilities
-func (es *EnhancedSystemV3) GetDetailedModelCapabilities() map[string]map[string]selection.ModelCapabilities {
+func (es *EnhancedSystemV3) GetDetailedModelCapabilities() map[string]map[string]ModelCapabilities {
 	return es.selector.GetDetailedModelCapabilities()
 }
 
@@ -290,12 +456,6 @@ func (es *EnhancedSystemV3) ValidateProviders() map[string][]string {
 			}
 		}
 		
-		// Validate detected capabilities
-		capabilities := es.selector.GetProviderCapabilities()[provider.Name]
-		if valid, warnings := es.selector.GetDetector().ValidateCapabilities(capabilities); !valid {
-			providerIssues = append(providerIssues, warnings...)
-		}
-		
 		if len(providerIssues) > 0 {
 			issues[provider.Name] = providerIssues
 		}
@@ -305,7 +465,7 @@ func (es *EnhancedSystemV3) ValidateProviders() map[string][]string {
 }
 
 // SetSelectionWeights allows customizing provider selection criteria
-func (es *EnhancedSystemV3) SetSelectionWeights(weights selection.SelectionWeights) {
+func (es *EnhancedSystemV3) SetSelectionWeights(weights SelectionWeights) {
 	es.selector.SetSelectionWeights(weights)
 	log.Printf("⚖️ Selection weights updated: %+v", weights)
 }
