@@ -3,149 +3,135 @@ package selection
 import (
 	"fmt"
 	"log"
-	"strings"
+
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/providers"
 )
 
-// LoadProvidersFromCSVWithDynamicModels enhances the existing CSV loader with dynamic model discovery
-func LoadProvidersFromCSVWithDynamicModels(filename string) ([]Provider, error) {
-	log.Printf("🚀 Loading providers from CSV with dynamic model discovery: %s", filename)
-	
-	// Load providers using existing CSV logic
-	providers, err := LoadProvidersFromCSV(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load providers from CSV: %w", err)
-	}
-	
-	// Create dynamic model loader
-	modelLoader := NewDynamicModelLoader()
-	
-	// Process each provider to check for dynamic model sources
-	for i, provider := range providers {
-		originalModels := provider.Models
-		log.Printf("🔍 Processing provider: %s (original models: %v)", provider.Name, originalModels)
-		
-		// Check if any model entry looks like a URL endpoint
-		var dynamicModels []string
-		var staticModels []string
-		
-		for _, model := range originalModels {
-			if strings.HasPrefix(model, "/") || strings.HasPrefix(model, "http://") || strings.HasPrefix(model, "https://") {
-				// This looks like an endpoint - try to fetch models dynamically
-				var modelURL string
-				if strings.HasPrefix(model, "/") {
-					// Relative path - combine with base URL
-					baseURL := strings.TrimSuffix(provider.BaseURL, "/")
-					modelURL = baseURL + model
-				} else {
-					// Absolute URL
-					modelURL = model
-				}
-				
-				log.Printf("🌐 Attempting dynamic model discovery for %s from: %s", provider.Name, modelURL)
-				
-				fetchedModels, err := modelLoader.LoadModelsFromSource(modelURL)
-				if err != nil {
-					log.Printf("⚠️  Failed to fetch models from %s: %v", modelURL, err)
-					// Keep the original model entry as fallback
-					staticModels = append(staticModels, model)
-				} else {
-					log.Printf("✅ Successfully fetched %d models from %s", len(fetchedModels), modelURL)
-					dynamicModels = append(dynamicModels, fetchedModels...)
-				}
-			} else {
-				// Static model name
-				staticModels = append(staticModels, model)
-			}
-		}
-		
-		// Combine dynamic and static models
-		var finalModels []string
-		finalModels = append(finalModels, dynamicModels...)
-		finalModels = append(finalModels, staticModels...)
-		
-		// Remove duplicates
-		finalModels = removeDuplicates(finalModels)
-		
-		if len(finalModels) == 0 {
-			log.Printf("⚠️  No models found for %s, using original list", provider.Name)
-			finalModels = originalModels
-		}
-		
-		// Update provider with final model list
-		providers[i].Models = finalModels
-		
-		if len(finalModels) != len(originalModels) {
-			log.Printf("🔄 Updated %s: %d → %d models", provider.Name, len(originalModels), len(finalModels))
-		}
-	}
-	
-	log.Printf("✅ Successfully loaded %d providers with dynamic model discovery", len(providers))
-	return providers, nil
+// IntegratedProviderSystem combines CSV and YAML provider loading
+type IntegratedProviderSystem struct {
+	csvLoader  *EnhancedProviderLoader
+	yamlLoader *YAMLProviderLoader
+	providers  []providers.ProviderConfig
 }
 
-// removeDuplicates removes duplicate strings from a slice
-func removeDuplicates(slice []string) []string {
-	seen := make(map[string]bool)
-	var result []string
-	
-	for _, item := range slice {
-		if !seen[item] {
-			seen[item] = true
-			result = append(result, item)
-		}
+// NewIntegratedProviderSystem creates a new integrated provider system
+func NewIntegratedProviderSystem() *IntegratedProviderSystem {
+	return &IntegratedProviderSystem{
+		csvLoader:  NewEnhancedProviderLoader(),
+		yamlLoader: NewYAMLProviderLoader(),
+		providers:  make([]providers.ProviderConfig, 0),
 	}
-	
-	return result
 }
 
-// RefreshProviderModelsFromCSV refreshes models for CSV-loaded providers
-func RefreshProviderModelsFromCSV(providers []Provider) error {
-	log.Println("🔄 Refreshing models for CSV-loaded providers...")
-	
-	modelLoader := NewDynamicModelLoader()
-	modelLoader.ClearCache() // Clear cache to force fresh fetches
-	
-	updated := 0
-	for i, provider := range providers {
-		hasEndpoints := false
-		var newModels []string
-		
-		for _, model := range provider.Models {
-			if strings.HasPrefix(model, "/") || strings.HasPrefix(model, "http://") || strings.HasPrefix(model, "https://") {
-				hasEndpoints = true
-				
-				var modelURL string
-				if strings.HasPrefix(model, "/") {
-					baseURL := strings.TrimSuffix(provider.BaseURL, "/")
-					modelURL = baseURL + model
-				} else {
-					modelURL = model
-				}
-				
-				fetchedModels, err := modelLoader.LoadModelsFromSource(modelURL)
-				if err != nil {
-					log.Printf("⚠️  Failed to refresh models for %s from %s: %v", provider.Name, modelURL, err)
-					newModels = append(newModels, model) // Keep original as fallback
-				} else {
-					newModels = append(newModels, fetchedModels...)
-				}
-			} else {
-				newModels = append(newModels, model)
-			}
-		}
-		
-		if hasEndpoints {
-			oldCount := len(provider.Models)
-			providers[i].Models = removeDuplicates(newModels)
-			newCount := len(providers[i].Models)
-			
-			if oldCount != newCount {
-				log.Printf("🔄 Refreshed %s: %d → %d models", provider.Name, oldCount, newCount)
-				updated++
-			}
+// LoadAllProviders loads providers from both CSV and YAML sources
+func (ips *IntegratedProviderSystem) LoadAllProviders(csvFile, yamlDir string) error {
+	var allProviders []providers.ProviderConfig
+
+	// Load CSV providers
+	if csvFile != "" {
+		csvProviders, err := ips.csvLoader.LoadProviders(csvFile)
+		if err != nil {
+			log.Printf("Warning: Failed to load CSV providers: %v", err)
+		} else {
+			allProviders = append(allProviders, csvProviders...)
+			log.Printf("Loaded %d providers from CSV", len(csvProviders))
 		}
 	}
-	
-	log.Printf("✅ Refreshed models for %d providers", updated)
+
+	// Load YAML providers
+	if yamlDir != "" {
+		yamlProviders, err := ips.yamlLoader.LoadProvidersFromDirectory(yamlDir)
+		if err != nil {
+			log.Printf("Warning: Failed to load YAML providers: %v", err)
+		} else {
+			allProviders = append(allProviders, yamlProviders...)
+			log.Printf("Loaded %d providers from YAML", len(yamlProviders))
+		}
+	}
+
+	ips.providers = allProviders
 	return nil
+}
+
+// GetProviders returns all loaded providers
+func (ips *IntegratedProviderSystem) GetProviders() []providers.ProviderConfig {
+	return ips.providers
+}
+
+// GetEnabledProviders returns only enabled providers
+func (ips *IntegratedProviderSystem) GetEnabledProviders() []providers.ProviderConfig {
+	var enabled []providers.ProviderConfig
+	for _, provider := range ips.providers {
+		if provider.Enabled {
+			enabled = append(enabled, provider)
+		}
+	}
+	return enabled
+}
+
+// GetProviderByName finds a provider by name
+func (ips *IntegratedProviderSystem) GetProviderByName(name string) (*providers.ProviderConfig, error) {
+	for _, provider := range ips.providers {
+		if provider.Name == name {
+			return &provider, nil
+		}
+	}
+	return nil, fmt.Errorf("provider %s not found", name)
+}
+
+// RefreshProviders refreshes all provider data
+func (ips *IntegratedProviderSystem) RefreshProviders(csvFile, yamlDir string) error {
+	return ips.LoadAllProviders(csvFile, yamlDir)
+}
+
+// GetStats returns statistics about the integrated system
+func (ips *IntegratedProviderSystem) GetStats() map[string]interface{} {
+	stats := make(map[string]interface{})
+	
+	total := len(ips.providers)
+	enabled := len(ips.GetEnabledProviders())
+	
+	stats["total_providers"] = total
+	stats["enabled_providers"] = enabled
+	stats["disabled_providers"] = total - enabled
+	
+	// Get CSV stats
+	csvStats := ips.csvLoader.GetProviderStats()
+	stats["csv_stats"] = csvStats
+	
+	return stats
+}
+
+// ValidateProviders checks if all providers have required fields
+func (ips *IntegratedProviderSystem) ValidateProviders() []string {
+	var issues []string
+	
+	for i, provider := range ips.providers {
+		if provider.Name == "" {
+			issues = append(issues, fmt.Sprintf("Provider %d: missing name", i))
+		}
+		if provider.URL == "" {
+			issues = append(issues, fmt.Sprintf("Provider %s: missing URL", provider.Name))
+		}
+	}
+	
+	return issues
+}
+
+// GetProvidersByPriority returns providers sorted by priority
+func (ips *IntegratedProviderSystem) GetProvidersByPriority() []providers.ProviderConfig {
+	// Create a copy to avoid modifying original slice
+	sortedProviders := make([]providers.ProviderConfig, len(ips.providers))
+	copy(sortedProviders, ips.providers)
+	
+	// Simple bubble sort by priority (higher priority first)
+	for i := 0; i < len(sortedProviders)-1; i++ {
+		for j := 0; j < len(sortedProviders)-i-1; j++ {
+			if sortedProviders[j].Priority < sortedProviders[j+1].Priority {
+				sortedProviders[j], sortedProviders[j+1] = sortedProviders[j+1], sortedProviders[j]
+			}
+		}
+	}
+	
+	return sortedProviders
 }

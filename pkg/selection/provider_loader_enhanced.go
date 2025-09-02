@@ -1,153 +1,158 @@
 package selection
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
 	"log"
 	"os"
-	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/providers"
 )
 
-// EnhancedProviderLoader combines CSV and YAML loading with dynamic model discovery
+// EnhancedProviderLoader handles loading providers with enhanced capabilities
 type EnhancedProviderLoader struct {
-	csvLoader  *CSVProviderLoader
-	yamlLoader *YAMLProviderLoader
+	providers       []providers.ProviderConfig
+	lastLoadTime    time.Time
+	cacheExpiration time.Duration
 }
-
-// CSVProviderLoader handles CSV-based provider loading (existing functionality)
-type CSVProviderLoader struct{}
 
 // NewEnhancedProviderLoader creates a new enhanced provider loader
 func NewEnhancedProviderLoader() *EnhancedProviderLoader {
 	return &EnhancedProviderLoader{
-		csvLoader:  &CSVProviderLoader{},
-		yamlLoader: NewYAMLProviderLoader(),
+		providers:       make([]providers.ProviderConfig, 0),
+		cacheExpiration: 5 * time.Minute,
 	}
 }
 
-// LoadProviders loads providers from multiple sources with priority:
-// 1. YAML files (if directory exists)
-// 2. CSV file (fallback)
-func (epl *EnhancedProviderLoader) LoadProviders(csvPath string, yamlDir string) ([]Provider, error) {
-	var providers []Provider
-	var err error
-	
-	// Try loading from YAML directory first
-	if yamlDir != "" {
-		if _, err := os.Stat(yamlDir); err == nil {
-			log.Printf("🔍 Attempting to load providers from YAML directory: %s", yamlDir)
-			
-			yamlProviders, yamlErr := epl.yamlLoader.LoadProvidersFromYAMLDir(yamlDir)
-			if yamlErr == nil && len(yamlProviders) > 0 {
-				log.Printf("✅ Successfully loaded %d providers from YAML files", len(yamlProviders))
-				return yamlProviders, nil
-			} else {
-				log.Printf("⚠️  Failed to load from YAML directory: %v", yamlErr)
+// LoadProvidersFromCSV loads providers from CSV file
+func LoadProvidersFromCSV(filename string) ([]providers.ProviderConfig, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open CSV file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	var providersList []providers.ProviderConfig
+
+	// Read header
+	header, err := reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CSV header: %w", err)
+	}
+
+	// Create column index map
+	columnIndex := make(map[string]int)
+	for i, col := range header {
+		columnIndex[strings.ToLower(strings.TrimSpace(col))] = i
+	}
+
+	// Read data rows
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Error reading CSV row: %v", err)
+			continue
+		}
+
+		provider := providers.ProviderConfig{}
+
+		// Map CSV columns to provider fields
+		if idx, exists := columnIndex["name"]; exists && idx < len(record) {
+			provider.Name = strings.TrimSpace(record[idx])
+		}
+		if idx, exists := columnIndex["url"]; exists && idx < len(record) {
+			provider.URL = strings.TrimSpace(record[idx])
+		}
+		if idx, exists := columnIndex["api_key"]; exists && idx < len(record) {
+			provider.APIKey = strings.TrimSpace(record[idx])
+		}
+		if idx, exists := columnIndex["priority"]; exists && idx < len(record) {
+			if priority, err := strconv.Atoi(strings.TrimSpace(record[idx])); err == nil {
+				provider.Priority = priority
 			}
+		}
+		if idx, exists := columnIndex["enabled"]; exists && idx < len(record) {
+			enabled := strings.ToLower(strings.TrimSpace(record[idx]))
+			provider.Enabled = enabled == "true" || enabled == "1" || enabled == "yes"
 		} else {
-			log.Printf("📁 YAML directory not found: %s", yamlDir)
+			provider.Enabled = true // Default to enabled
+		}
+
+		if provider.Name != "" {
+			providersList = append(providersList, provider)
 		}
 	}
-	
-	// Fallback to CSV loading
-	log.Printf("🔄 Falling back to CSV provider loading: %s", csvPath)
-	providers, err = LoadProvidersFromCSV(csvPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load providers from CSV: %w", err)
-	}
-	
-	log.Printf("✅ Successfully loaded %d providers from CSV", len(providers))
-	return providers, nil
+
+	return providersList, nil
 }
 
-// LoadProvidersWithDynamicModels loads providers and refreshes their models dynamically
-func (epl *EnhancedProviderLoader) LoadProvidersWithDynamicModels(csvPath string, yamlDir string) ([]Provider, error) {
-	providers, err := epl.LoadProviders(csvPath, yamlDir)
+// LoadProviders loads providers with caching
+func (epl *EnhancedProviderLoader) LoadProviders(filename string) ([]providers.ProviderConfig, error) {
+	// Check if cache is still valid
+	if time.Since(epl.lastLoadTime) < epl.cacheExpiration && len(epl.providers) > 0 {
+		return epl.providers, nil
+	}
+
+	// Load fresh data
+	newProviders, err := LoadProvidersFromCSV(filename)
 	if err != nil {
 		return nil, err
 	}
-	
-	// For CSV-loaded providers, check if they have dynamic model sources
-	// This would require extending the CSV format or having companion YAML files
-	
-	return providers, nil
+
+	epl.providers = newProviders
+	epl.lastLoadTime = time.Now()
+
+	return epl.providers, nil
 }
 
-// RefreshProviderModels refreshes models for all providers that support dynamic loading
-func (epl *EnhancedProviderLoader) RefreshProviderModels(providers []Provider, yamlDir string) error {
-	if yamlDir == "" {
-		log.Println("📋 No YAML directory specified, skipping model refresh")
-		return nil
-	}
-	
-	log.Printf("🔄 Refreshing models for providers using YAML configs in: %s", yamlDir)
-	
-	// Clear the model cache
-	epl.yamlLoader.RefreshAllModels()
-	
-	// Reload providers to get fresh models
-	refreshedProviders, err := epl.yamlLoader.LoadProvidersFromYAMLDir(yamlDir)
-	if err != nil {
-		return fmt.Errorf("failed to refresh provider models: %w", err)
-	}
-	
-	// Update the existing providers with fresh model lists
-	providerMap := make(map[string][]string)
-	for _, provider := range refreshedProviders {
-		providerMap[provider.Name] = provider.Models
-	}
-	
-	updated := 0
-	for i, provider := range providers {
-		if newModels, exists := providerMap[provider.Name]; exists {
-			oldCount := len(provider.Models)
-			providers[i].Models = newModels
-			newCount := len(newModels)
-			
-			if oldCount != newCount {
-				log.Printf("🔄 Updated %s: %d → %d models", provider.Name, oldCount, newCount)
-				updated++
-			}
+// GetProviderByName finds a provider by name
+func (epl *EnhancedProviderLoader) GetProviderByName(name string) (*providers.ProviderConfig, error) {
+	for _, provider := range epl.providers {
+		if strings.EqualFold(provider.Name, name) {
+			return &provider, nil
 		}
 	}
-	
-	log.Printf("✅ Refreshed models for %d providers", updated)
-	return nil
+	return nil, fmt.Errorf("provider %s not found", name)
 }
 
-// GetProviderLoadingStats returns statistics about provider loading
-func (epl *EnhancedProviderLoader) GetProviderLoadingStats() map[string]interface{} {
-	stats := map[string]interface{}{
-		"csv_loader":  "available",
-		"yaml_loader": "available",
-		"cache_stats": epl.yamlLoader.GetCacheStats(),
+// GetEnabledProviders returns only enabled providers
+func (epl *EnhancedProviderLoader) GetEnabledProviders() []providers.ProviderConfig {
+	var enabled []providers.ProviderConfig
+	for _, provider := range epl.providers {
+		if provider.Enabled {
+			enabled = append(enabled, provider)
+		}
 	}
+	return enabled
+}
+
+// RefreshProviders forces a refresh of provider data
+func (epl *EnhancedProviderLoader) RefreshProviders(filename string) error {
+	epl.lastLoadTime = time.Time{} // Reset cache
+	_, err := epl.LoadProviders(filename)
+	return err
+}
+
+// GetProviderStats returns statistics about loaded providers
+func (epl *EnhancedProviderLoader) GetProviderStats() map[string]interface{} {
+	stats := make(map[string]interface{})
+	
+	total := len(epl.providers)
+	enabled := len(epl.GetEnabledProviders())
+	
+	stats["total_providers"] = total
+	stats["enabled_providers"] = enabled
+	stats["disabled_providers"] = total - enabled
+	stats["last_load_time"] = epl.lastLoadTime
+	stats["cache_expiration"] = epl.cacheExpiration
 	
 	return stats
-}
-
-// ValidateProviderSources checks if provider sources are accessible
-func (epl *EnhancedProviderLoader) ValidateProviderSources(providers []Provider, yamlDir string) map[string][]string {
-	issues := make(map[string][]string)
-	
-	if yamlDir == "" {
-		return issues
-	}
-	
-	// Check each provider's YAML file for dynamic loading configuration
-	for _, provider := range providers {
-		yamlFile := filepath.Join(yamlDir, provider.Name+".yaml")
-		if _, err := os.Stat(yamlFile); err == nil {
-			// Try to load and validate the YAML configuration
-			yamlProvider, err := epl.yamlLoader.LoadProviderFromYAML(yamlFile)
-			if err != nil {
-				issues[provider.Name] = append(issues[provider.Name], 
-					fmt.Sprintf("Failed to load YAML config: %v", err))
-			} else if len(yamlProvider.Models) == 0 {
-				issues[provider.Name] = append(issues[provider.Name], 
-					"No models found in YAML configuration")
-			}
-		}
-	}
-	
-	return issues
 }
