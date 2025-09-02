@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/enhanced"
 )
 
 // TaskReasoner analyzes task complexity and requirements
@@ -15,8 +13,8 @@ type TaskReasoner struct {
 
 // TaskReasonerConfig represents configuration for the task reasoner
 type TaskReasonerConfig struct {
-	ComplexityWeights map[string]float64                   `json:"complexity_weights"`
-	TokenMultipliers  map[enhanced.ComplexityLevel]float64 `json:"token_multipliers"`
+	ComplexityWeights map[string]float64                `json:"complexity_weights"`
+	TokenMultipliers  map[ComplexityLevel]float64       `json:"token_multipliers"`
 }
 
 // NewTaskReasoner creates a new task reasoner with default configuration
@@ -29,18 +27,18 @@ func NewTaskReasoner() *TaskReasoner {
 				"creative":     0.2,
 				"factual":      0.25,
 			},
-			TokenMultipliers: map[enhanced.ComplexityLevel]float64{
-				enhanced.Low:      1.0,
-				enhanced.Medium:   1.2,
-				enhanced.High:     1.5,
-				enhanced.VeryHigh: 2.0,
+			TokenMultipliers: map[ComplexityLevel]float64{
+				Low:      1.0,
+				Medium:   1.2,
+				High:     1.5,
+				VeryHigh: 2.0,
 			},
 		},
 	}
 }
 
 // AnalyzeComplexity analyzes the complexity of a task
-func (tr *TaskReasoner) AnalyzeComplexity(content string) (*enhanced.TaskComplexity, error) {
+func (tr *TaskReasoner) AnalyzeComplexity(content string) (*TaskComplexity, error) {
 	if strings.TrimSpace(content) == "" {
 		return nil, fmt.Errorf("content cannot be empty")
 	}
@@ -60,7 +58,7 @@ func (tr *TaskReasoner) AnalyzeComplexity(content string) (*enhanced.TaskComplex
 	// Determine required capabilities
 	capabilities := tr.determineRequiredCapabilities(reasoning, mathematical, creative, factual)
 
-	return &enhanced.TaskComplexity{
+	return &TaskComplexity{
 		Overall:              overall,
 		Reasoning:            reasoning,
 		Mathematical:         mathematical,
@@ -73,7 +71,7 @@ func (tr *TaskReasoner) AnalyzeComplexity(content string) (*enhanced.TaskComplex
 }
 
 // detectReasoningComplexity analyzes reasoning complexity
-func (tr *TaskReasoner) detectReasoningComplexity(content string) enhanced.ComplexityLevel {
+func (tr *TaskReasoner) detectReasoningComplexity(content string) ComplexityLevel {
 	content = strings.ToLower(content)
 	
 	reasoningPatterns := []*regexp.Regexp{
@@ -90,18 +88,18 @@ func (tr *TaskReasoner) detectReasoningComplexity(content string) enhanced.Compl
 	
 	switch {
 	case score >= 5:
-		return enhanced.VeryHigh
+		return VeryHigh
 	case score >= 3:
-		return enhanced.High
+		return High
 	case score >= 1:
-		return enhanced.Medium
+		return Medium
 	default:
-		return enhanced.Low
+		return Low
 	}
 }
 
 // detectMathematicalComplexity analyzes mathematical complexity
-func (tr *TaskReasoner) detectMathematicalComplexity(content string) enhanced.ComplexityLevel {
+func (tr *TaskReasoner) detectMathematicalComplexity(content string) ComplexityLevel {
 	content = strings.ToLower(content)
 	
 	mathPatterns := []*regexp.Regexp{
@@ -127,18 +125,18 @@ func (tr *TaskReasoner) detectMathematicalComplexity(content string) enhanced.Co
 	
 	switch {
 	case score >= 4:
-		return enhanced.VeryHigh
+		return VeryHigh
 	case score >= 2:
-		return enhanced.High
+		return High
 	case score >= 1:
-		return enhanced.Medium
+		return Medium
 	default:
-		return enhanced.Low
+		return Low
 	}
 }
 
 // detectCreativeComplexity analyzes creative complexity
-func (tr *TaskReasoner) detectCreativeComplexity(content string) enhanced.ComplexityLevel {
+func (tr *TaskReasoner) detectCreativeComplexity(content string) ComplexityLevel {
 	content = strings.ToLower(content)
 	
 	creativePatterns := []*regexp.Regexp{
@@ -164,18 +162,18 @@ func (tr *TaskReasoner) detectCreativeComplexity(content string) enhanced.Comple
 	
 	switch {
 	case score >= 3:
-		return enhanced.High
+		return High
 	case score >= 2:
-		return enhanced.Medium
+		return Medium
 	case score >= 1:
-		return enhanced.Medium
+		return Medium
 	default:
-		return enhanced.Low
+		return Low
 	}
 }
 
 // detectFactualComplexity analyzes factual complexity
-func (tr *TaskReasoner) detectFactualComplexity(content string) enhanced.ComplexityLevel {
+func (tr *TaskReasoner) detectFactualComplexity(content string) ComplexityLevel {
 	content = strings.ToLower(content)
 	
 	factualPatterns := []*regexp.Regexp{
@@ -192,35 +190,35 @@ func (tr *TaskReasoner) detectFactualComplexity(content string) enhanced.Complex
 	
 	switch {
 	case score >= 5:
-		return enhanced.VeryHigh
+		return VeryHigh
 	case score >= 3:
-		return enhanced.High
+		return High
 	case score >= 1:
-		return enhanced.Medium
+		return Medium
 	default:
-		return enhanced.Low
+		return Low
 	}
 }
 
 // determineOverallComplexity calculates overall complexity from components
-func (tr *TaskReasoner) determineOverallComplexity(reasoning, mathematical, creative, factual enhanced.ComplexityLevel) enhanced.ComplexityLevel {
+func (tr *TaskReasoner) determineOverallComplexity(reasoning, mathematical, creative, factual ComplexityLevel) ComplexityLevel {
 	// Calculate weighted average
 	total := int(reasoning)*2 + int(mathematical)*2 + int(creative) + int(factual)
 	average := total / 6
 	
 	// Ensure we don't exceed bounds
-	if average > int(enhanced.VeryHigh) {
-		return enhanced.VeryHigh
+	if average > int(VeryHigh) {
+		return VeryHigh
 	}
-	if average < int(enhanced.Low) {
-		return enhanced.Low
+	if average < int(Low) {
+		return Low
 	}
 	
-	return enhanced.ComplexityLevel(average)
+	return ComplexityLevel(average)
 }
 
 // estimateTokensFromText provides a simple token estimation
-func (tr *TaskReasoner) estimateTokensFromText(text string, complexity enhanced.ComplexityLevel) int64 {
+func (tr *TaskReasoner) estimateTokensFromText(text string, complexity ComplexityLevel) int64 {
 	words := strings.Fields(text)
 	baseTokens := float64(len(words)) * 1.33 // Rough approximation: 1 token per 0.75 words
 	
@@ -233,19 +231,19 @@ func (tr *TaskReasoner) estimateTokensFromText(text string, complexity enhanced.
 }
 
 // determineRequiredCapabilities determines what capabilities are needed
-func (tr *TaskReasoner) determineRequiredCapabilities(reasoning, mathematical, creative, factual enhanced.ComplexityLevel) []string {
+func (tr *TaskReasoner) determineRequiredCapabilities(reasoning, mathematical, creative, factual ComplexityLevel) []string {
 	var capabilities []string
 	
-	if reasoning >= enhanced.Medium {
+	if reasoning >= Medium {
 		capabilities = append(capabilities, "reasoning")
 	}
-	if mathematical >= enhanced.Medium {
+	if mathematical >= Medium {
 		capabilities = append(capabilities, "mathematical")
 	}
-	if creative >= enhanced.Medium {
+	if creative >= Medium {
 		capabilities = append(capabilities, "creative")
 	}
-	if factual >= enhanced.Medium {
+	if factual >= Medium {
 		capabilities = append(capabilities, "factual")
 	}
 	

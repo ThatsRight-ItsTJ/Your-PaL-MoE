@@ -1,18 +1,53 @@
 package components
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/enhanced"
 )
+
+// ComplexityLevel represents the complexity level of a task
+type ComplexityLevel int
+
+const (
+	Low ComplexityLevel = iota
+	Medium
+	High
+	VeryHigh
+)
+
+// String returns string representation of complexity level
+func (cl ComplexityLevel) String() string {
+	switch cl {
+	case Low:
+		return "low"
+	case Medium:
+		return "medium"
+	case High:
+		return "high"
+	case VeryHigh:
+		return "very_high"
+	default:
+		return "unknown"
+	}
+}
+
+// TaskComplexity represents the complexity analysis of a task
+type TaskComplexity struct {
+	Overall              ComplexityLevel     `json:"overall"`
+	Reasoning            ComplexityLevel     `json:"reasoning"`
+	Mathematical         ComplexityLevel     `json:"mathematical"`
+	Creative             ComplexityLevel     `json:"creative"`
+	Factual              ComplexityLevel     `json:"factual"`
+	TokenEstimate        int64               `json:"token_estimate"`
+	RequiredCapabilities []string            `json:"required_capabilities"`
+	Metadata             map[string]interface{} `json:"metadata"`
+}
 
 // SPOOptimizer represents a self-prompt optimizer
 type SPOOptimizer struct {
 	templates         map[string]string
-	optimizationRules map[enhanced.ComplexityLevel][]string
+	optimizationRules map[ComplexityLevel][]string
 	cache            map[string]CachedOptimization
 	maxCacheSize     int
 	cacheHitRate     float64
@@ -22,7 +57,7 @@ type SPOOptimizer struct {
 // CachedOptimization represents a cached optimization result
 type CachedOptimization struct {
 	OptimizedPrompt string
-	Complexity      enhanced.ComplexityLevel
+	Complexity      ComplexityLevel
 	Timestamp       time.Time
 	HitCount        int
 }
@@ -36,11 +71,11 @@ func NewSPOOptimizer() *SPOOptimizer {
 			"factual":   "Provide accurate and factual information about: {prompt}",
 			"mathematical": "Solve the following mathematical problem: {prompt}",
 		},
-		optimizationRules: map[enhanced.ComplexityLevel][]string{
-			enhanced.Low:      {"simplify", "clarify"},
-			enhanced.Medium:   {"structure", "examples", "context"},
-			enhanced.High:     {"breakdown", "methodology", "constraints"},
-			enhanced.VeryHigh: {"systematic", "comprehensive", "multi-step"},
+		optimizationRules: map[ComplexityLevel][]string{
+			Low:      {"simplify", "clarify"},
+			Medium:   {"structure", "examples", "context"},
+			High:     {"breakdown", "methodology", "constraints"},
+			VeryHigh: {"systematic", "comprehensive", "multi-step"},
 		},
 		cache:        make(map[string]CachedOptimization),
 		maxCacheSize: 1000,
@@ -48,7 +83,7 @@ func NewSPOOptimizer() *SPOOptimizer {
 }
 
 // OptimizePrompt optimizes a prompt based on complexity
-func (spo *SPOOptimizer) OptimizePrompt(prompt string, complexity enhanced.TaskComplexity) (string, error) {
+func (spo *SPOOptimizer) OptimizePrompt(prompt string, complexity TaskComplexity) (string, error) {
 	if strings.TrimSpace(prompt) == "" {
 		return "", fmt.Errorf("prompt cannot be empty")
 	}
@@ -79,7 +114,7 @@ func (spo *SPOOptimizer) OptimizePrompt(prompt string, complexity enhanced.TaskC
 }
 
 // applyOptimizationRules applies optimization rules based on complexity
-func (spo *SPOOptimizer) applyOptimizationRules(prompt string, complexity enhanced.TaskComplexity) string {
+func (spo *SPOOptimizer) applyOptimizationRules(prompt string, complexity TaskComplexity) string {
 	optimized := prompt
 
 	// Get rules for the complexity level
@@ -93,7 +128,7 @@ func (spo *SPOOptimizer) applyOptimizationRules(prompt string, complexity enhanc
 }
 
 // applyRule applies a specific optimization rule
-func (spo *SPOOptimizer) applyRule(prompt string, rule string, complexity enhanced.TaskComplexity) string {
+func (spo *SPOOptimizer) applyRule(prompt string, rule string, complexity TaskComplexity) string {
 	switch rule {
 	case "simplify":
 		return fmt.Sprintf("Please provide a simple and clear answer to: %s", prompt)
