@@ -118,6 +118,16 @@ type ProcessResponse struct {
 	Metadata         map[string]interface{}     `json:"metadata"`
 }
 
+// RequestInput represents input for processing requests
+type RequestInput struct {
+	Content          string                     `json:"content"`
+	TaskType         TaskType                   `json:"task_type,omitempty"`
+	MaxTokens        int64                      `json:"max_tokens,omitempty"`
+	Temperature      float64                    `json:"temperature,omitempty"`
+	PreferredProvider string                    `json:"preferred_provider,omitempty"`
+	Metadata         map[string]interface{}     `json:"metadata,omitempty"`
+}
+
 // TaskReasoner analyzes task complexity
 type TaskReasoner struct {
 	complexityWeights map[string]float64
