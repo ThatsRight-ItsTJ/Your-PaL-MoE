@@ -1,221 +1,175 @@
 package enhanced
 
 import (
-	"context"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
-// AnalyzeComplexity analyzes the complexity of a given task
-func (tr *TaskReasoner) AnalyzeComplexity(ctx context.Context, input RequestInput) (*TaskComplexity, error) {
-	if input.Query == "" {
-		return nil, fmt.Errorf("empty query provided")
-	}
+// Implementation moved to constructors.go to avoid duplicate method declarations
+// This file now only contains helper functions and constants
 
-	// Analyze different aspects of complexity
-	reasoning := tr.analyzeReasoningComplexity(input.Query)
-	knowledge := tr.analyzeKnowledgeComplexity(input.Query)
-	computation := tr.analyzeComputationComplexity(input.Query)
-	coordination := tr.analyzeCoordinationComplexity(input.Query)
-
-	// Calculate overall complexity
-	overall := (reasoning + knowledge + computation + coordination) / 4.0
-
-	complexity := &TaskComplexity{
-		Reasoning:     reasoning,
-		Knowledge:     knowledge,
-		Computation:   computation,
-		Coordination:  coordination,
-		Overall:       overall,
-		Score:         overall,
-	}
-
-	fmt.Printf("Task complexity analysis: Overall=%.2f, Reasoning=%.2f, Knowledge=%.2f, Computation=%.2f, Coordination=%.2f\n",
-		overall, reasoning, knowledge, computation, coordination)
-
-	return complexity, nil
+// complexityKeywords maps keywords to complexity indicators
+var complexityKeywords = map[string]ComplexityLevel{
+	// Low complexity indicators
+	"simple":     Low,
+	"basic":      Low,
+	"easy":       Low,
+	"straightforward": Low,
+	
+	// Medium complexity indicators
+	"moderate":   Medium,
+	"compare":    Medium,
+	"analyze":    Medium,
+	"explain":    Medium,
+	
+	// High complexity indicators
+	"complex":    High,
+	"difficult":  High,
+	"advanced":   High,
+	"intricate":  High,
+	
+	// Very high complexity indicators
+	"extremely":  VeryHigh,
+	"highly":     VeryHigh,
+	"very":       VeryHigh,
+	"multi-step": VeryHigh,
 }
 
-// analyzeReasoningComplexity analyzes the reasoning complexity of a task
-func (tr *TaskReasoner) analyzeReasoningComplexity(query string) float64 {
-	query = strings.ToLower(query)
-	
-	// Check for complex reasoning patterns
-	complexPatterns := []string{
-		"analyze", "compare", "evaluate", "synthesize", "deduce", "infer",
-		"reasoning", "logic", "proof", "argument", "conclusion", "premise",
-		"because", "therefore", "consequently", "implies", "follows",
-	}
-	
-	score := 1.0 // Base score
-	for _, pattern := range complexPatterns {
-		if strings.Contains(query, pattern) {
-			score += 0.5
-		}
-	}
-	
-	// Cap at 4.0 (VeryHigh level)
-	if score > 4.0 {
-		score = 4.0
-	}
-	
-	return score
+// mathematicalPatterns identifies mathematical content
+var mathematicalPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\d+\s*[\+\-\*\/\^]\s*\d+`),
+	regexp.MustCompile(`\b(equation|formula|calculate|solve|derivative|integral)\b`),
+	regexp.MustCompile(`\b(algebra|geometry|calculus|statistics|probability)\b`),
+	regexp.MustCompile(`[∑∏∫∂∇∆]`),
 }
 
-// analyzeKnowledgeComplexity analyzes the knowledge complexity of a task
-func (tr *TaskReasoner) analyzeKnowledgeComplexity(query string) float64 {
-	query = strings.ToLower(query)
-	
-	// Check for knowledge-intensive patterns
-	knowledgePatterns := []string{
-		"explain", "describe", "define", "what is", "how does", "why",
-		"history", "theory", "concept", "principle", "law", "rule",
-		"research", "study", "academic", "scientific", "technical",
-	}
-	
-	score := 1.0 // Base score
-	for _, pattern := range knowledgePatterns {
-		if strings.Contains(query, pattern) {
-			score += 0.4
-		}
-	}
-	
-	// Check for domain-specific knowledge
-	domains := []string{
-		"medical", "legal", "financial", "engineering", "physics",
-		"chemistry", "biology", "mathematics", "computer science",
-	}
-	
-	for _, domain := range domains {
-		if strings.Contains(query, domain) {
-			score += 0.6
-		}
-	}
-	
-	if score > 4.0 {
-		score = 4.0
-	}
-	
-	return score
+// creativePatterns identifies creative content
+var creativePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\b(write|create|generate|compose|design)\b`),
+	regexp.MustCompile(`\b(story|poem|article|essay|creative)\b`),
+	regexp.MustCompile(`\b(imagine|brainstorm|invent|original)\b`),
 }
 
-// analyzeComputationComplexity analyzes the computational complexity of a task
-func (tr *TaskReasoner) analyzeComputationComplexity(query string) float64 {
-	query = strings.ToLower(query)
-	
-	// Check for computation-intensive patterns
-	computationPatterns := []string{
-		"calculate", "compute", "solve", "optimize", "algorithm",
-		"formula", "equation", "mathematical", "statistical", "numerical",
-		"process", "transform", "convert", "generate", "create",
-	}
-	
-	score := 1.0 // Base score
-	for _, pattern := range computationPatterns {
-		if strings.Contains(query, pattern) {
-			score += 0.5
-		}
-	}
-	
-	// Check for complex computational tasks
-	complexTasks := []string{
-		"machine learning", "data analysis", "simulation", "modeling",
-		"optimization", "algorithm design", "code generation",
-	}
-	
-	for _, task := range complexTasks {
-		if strings.Contains(query, task) {
-			score += 0.8
-		}
-	}
-	
-	if score > 4.0 {
-		score = 4.0
-	}
-	
-	return score
+// reasoningPatterns identifies reasoning content
+var reasoningPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\b(because|therefore|however|although|since)\b`),
+	regexp.MustCompile(`\b(analyze|evaluate|compare|contrast|argue)\b`),
+	regexp.MustCompile(`\b(logic|reasoning|conclusion|premise|inference)\b`),
 }
 
-// analyzeCoordinationComplexity analyzes the coordination complexity of a task
-func (tr *TaskReasoner) analyzeCoordinationComplexity(query string) float64 {
-	query = strings.ToLower(query)
-	
-	// Check for coordination-intensive patterns
-	coordinationPatterns := []string{
-		"plan", "organize", "coordinate", "manage", "schedule",
-		"workflow", "process", "steps", "sequence", "order",
-		"multiple", "various", "different", "several", "many",
-	}
-	
-	score := 1.0 // Base score
-	for _, pattern := range coordinationPatterns {
-		if strings.Contains(query, pattern) {
-			score += 0.4
-		}
-	}
-	
-	// Check for multi-step or multi-component tasks
-	multiStepPatterns := []string{
-		"first", "then", "next", "finally", "step by step",
-		"phase", "stage", "component", "part", "section",
-	}
-	
-	for _, pattern := range multiStepPatterns {
-		if strings.Contains(query, pattern) {
-			score += 0.6
-		}
-	}
-	
-	if score > 4.0 {
-		score = 4.0
-	}
-	
-	return score
+// estimateTokensFromText provides a simple token estimation
+func estimateTokensFromText(text string) int64 {
+	words := strings.Fields(text)
+	// Rough approximation: 1 token per 0.75 words
+	return int64(float64(len(words)) * 1.33)
 }
 
-// GetComplexityLevel converts a numeric score to a complexity level
-func (tr *TaskReasoner) GetComplexityLevel(score float64) ComplexityLevel {
-	return FloatToComplexityLevel(score)
+// detectMathematicalComplexity analyzes mathematical complexity
+func detectMathematicalComplexity(content string) ComplexityLevel {
+	content = strings.ToLower(content)
+	
+	mathScore := 0
+	for _, pattern := range mathematicalPatterns {
+		if pattern.MatchString(content) {
+			mathScore++
+		}
+	}
+	
+	// Advanced math keywords
+	advancedMath := []string{"calculus", "differential", "integral", "matrix", "vector", "theorem"}
+	for _, keyword := range advancedMath {
+		if strings.Contains(content, keyword) {
+			mathScore += 2
+		}
+	}
+	
+	switch {
+	case mathScore >= 4:
+		return VeryHigh
+	case mathScore >= 2:
+		return High
+	case mathScore >= 1:
+		return Medium
+	default:
+		return Low
+	}
 }
 
-// AnalyzeConstraints analyzes any constraints in the input
-func (tr *TaskReasoner) AnalyzeConstraints(input RequestInput) map[string]interface{} {
-	constraints := make(map[string]interface{})
+// detectCreativeComplexity analyzes creative complexity
+func detectCreativeComplexity(content string) ComplexityLevel {
+	content = strings.ToLower(content)
 	
-	// Check if constraints are provided in input
-	if input.Constraints != nil {
-		for key, value := range input.Constraints {
-			constraints[key] = value
+	creativeScore := 0
+	for _, pattern := range creativePatterns {
+		if pattern.MatchString(content) {
+			creativeScore++
 		}
 	}
 	
-	// Analyze query for implicit constraints
-	query := strings.ToLower(input.Query)
-	
-	// Time constraints
-	timeConstraints := []string{"urgent", "asap", "quickly", "immediate", "fast"}
-	for _, constraint := range timeConstraints {
-		if strings.Contains(query, constraint) {
-			constraints["time_sensitive"] = true
-			break
+	// Check for creative requirements
+	creativeKeywords := []string{"original", "unique", "innovative", "artistic", "imaginative"}
+	for _, keyword := range creativeKeywords {
+		if strings.Contains(content, keyword) {
+			creativeScore++
 		}
 	}
 	
-	// Quality constraints
-	qualityConstraints := []string{"detailed", "comprehensive", "thorough", "accurate", "precise"}
-	for _, constraint := range qualityConstraints {
-		if strings.Contains(query, constraint) {
-			constraints["high_quality"] = true
-			break
+	switch {
+	case creativeScore >= 3:
+		return High
+	case creativeScore >= 2:
+		return Medium
+	case creativeScore >= 1:
+		return Medium
+	default:
+		return Low
+	}
+}
+
+// detectReasoningComplexity analyzes reasoning complexity
+func detectReasoningComplexity(content string) ComplexityLevel {
+	content = strings.ToLower(content)
+	
+	reasoningScore := 0
+	for _, pattern := range reasoningPatterns {
+		matches := pattern.FindAllString(content, -1)
+		reasoningScore += len(matches)
+	}
+	
+	// Check for complex reasoning indicators
+	complexReasoning := []string{"multi-step", "chain of thought", "logical", "deductive", "inductive"}
+	for _, keyword := range complexReasoning {
+		if strings.Contains(content, keyword) {
+			reasoningScore += 2
 		}
 	}
 	
-	// Length constraints
-	if strings.Contains(query, "brief") || strings.Contains(query, "short") || strings.Contains(query, "summary") {
-		constraints["length"] = "short"
-	} else if strings.Contains(query, "detailed") || strings.Contains(query, "comprehensive") {
-		constraints["length"] = "long"
+	switch {
+	case reasoningScore >= 5:
+		return VeryHigh
+	case reasoningScore >= 3:
+		return High
+	case reasoningScore >= 1:
+		return Medium
+	default:
+		return Low
+	}
+}
+
+// determineOverallComplexity calculates overall complexity from components
+func determineOverallComplexity(reasoning, mathematical, creative, factual ComplexityLevel) ComplexityLevel {
+	// Calculate weighted average
+	total := int(reasoning)*2 + int(mathematical)*2 + int(creative) + int(factual)
+	average := total / 6
+	
+	// Ensure we don't exceed bounds
+	if average > int(VeryHigh) {
+		return VeryHigh
+	}
+	if average < int(Low) {
+		return Low
 	}
 	
-	return constraints
+	return ComplexityLevel(average)
 }
