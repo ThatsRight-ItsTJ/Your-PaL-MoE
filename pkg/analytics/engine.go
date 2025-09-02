@@ -1,375 +1,314 @@
 package analytics
 
 import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "sync"
-    "time"
+	"context"
+	"fmt"
+	"sync"
+	"time"
 
-    "github.com/go-redis/redis/v8"
-    "github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/pollinations"
-    "github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/providers"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/pollinations"
+	"github.com/sirupsen/logrus"
 )
 
+// AnalyticsEngine provides analytics and insights functionality
 type AnalyticsEngine struct {
-    redis              *redis.Client
-    pollinationsClient *pollinations.Client
-    providerManager    *providers.ProviderManager
-    metricsStore       *MetricsStore
-    insightsGenerator  *InsightsGenerator
+	logger             *logrus.Logger
+	metricsStore       *MetricsStore
+	insightsGenerator  *InsightsGenerator
+	pollinationsClient *pollinations.Client
+	mutex              sync.RWMutex
 }
 
+// MetricsStore handles storage and retrieval of metrics
 type MetricsStore struct {
-    redis  *redis.Client
-    mu     sync.RWMutex
-    cache  map[string]*CachedMetrics
+	cache       map[string]*CachedMetrics
+	cacheMutex  sync.RWMutex
+	maxCacheAge time.Duration
 }
 
+// CachedMetrics represents cached metric data
 type CachedMetrics struct {
-    Data      interface{}
-    UpdatedAt time.Time
-    TTL       time.Duration
+	Data      interface{}
+	Timestamp time.Time
+	TTL       time.Duration
 }
 
+// RequestMetrics represents metrics for individual requests
 type RequestMetrics struct {
-    RequestID        string        `json:"request_id"`
-    UserID           string        `json:"user_id"`
-    Timestamp        time.Time     `json:"timestamp"`
-    Provider         string        `json:"provider"`
-    Model            string        `json:"model"`
-    Tier             string        `json:"tier"`
-    TaskType         string        `json:"task_type"`
-    ResponseTime     time.Duration `json:"response_time"`
-    Cost             float64       `json:"cost"`
-    TokensUsed       int           `json:"tokens_used"`
-    Success          bool          `json:"success"`
-    ErrorMessage     string        `json:"error_message,omitempty"`
-    QualityScore     int           `json:"quality_score"`
-    FallbackUsed     bool          `json:"fallback_used"`
-    ParallelExecution bool         `json:"parallel_execution"`
+	RequestID    string    `json:"request_id"`
+	ProviderID   string    `json:"provider_id"`
+	Model        string    `json:"model"`
+	Timestamp    time.Time `json:"timestamp"`
+	Duration     int64     `json:"duration_ms"`
+	TokensUsed   int       `json:"tokens_used"`
+	Cost         float64   `json:"cost"`
+	Success      bool      `json:"success"`
+	ErrorMessage string    `json:"error_message,omitempty"`
 }
 
+// ProviderPerformance represents performance metrics for a provider
 type ProviderPerformance struct {
-    ProviderName     string        `json:"provider_name"`
-    Tier             string        `json:"tier"`
-    TotalRequests    int           `json:"total_requests"`
-    SuccessfulRequests int         `json:"successful_requests"`
-    FailedRequests   int           `json:"failed_requests"`
-    SuccessRate      float64       `json:"success_rate"`
-    AverageResponseTime time.Duration `json:"average_response_time"`
-    TotalCost        float64       `json:"total_cost"`
-    TotalTokens      int           `json:"total_tokens"`
-    AverageQuality   float64       `json:"average_quality"`
-    Uptime           float64       `json:"uptime_percentage"`
-    LastUsed         time.Time     `json:"last_used"`
+	ProviderID      string    `json:"provider_id"`
+	TotalRequests   int       `json:"total_requests"`
+	SuccessfulReqs  int       `json:"successful_requests"`
+	FailedReqs      int       `json:"failed_requests"`
+	SuccessRate     float64   `json:"success_rate"`
+	AvgResponseTime float64   `json:"avg_response_time_ms"`
+	TotalCost       float64   `json:"total_cost"`
+	LastUpdated     time.Time `json:"last_updated"`
 }
 
+// CostAnalysis represents cost analysis data
 type CostAnalysis struct {
-    Period           string                    `json:"period"`
-    TotalCost        float64                   `json:"total_cost"`
-    CostByTier       map[string]float64        `json:"cost_by_tier"`
-    CostByProvider   map[string]float64        `json:"cost_by_provider"`
-    CostByUser       map[string]float64        `json:"cost_by_user"`
-    SavingsVsOfficial float64                  `json:"savings_vs_official"`
-    OptimizationOpportunities []OptimizationOpportunity `json:"optimization_opportunities"`
+	TotalCost       float64                    `json:"total_cost"`
+	CostByProvider  map[string]float64         `json:"cost_by_provider"`
+	CostByModel     map[string]float64         `json:"cost_by_model"`
+	CostTrend       []CostDataPoint            `json:"cost_trend"`
+	Recommendations []OptimizationOpportunity  `json:"recommendations"`
+	Period          string                     `json:"period"`
 }
 
+// CostDataPoint represents a point in cost trend data
+type CostDataPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	Cost      float64   `json:"cost"`
+}
+
+// OptimizationOpportunity represents a cost optimization suggestion
 type OptimizationOpportunity struct {
-    Description      string  `json:"description"`
-    PotentialSavings float64 `json:"potential_savings"`
-    Implementation   string  `json:"implementation"`
-    Impact           string  `json:"impact"`
+	Type        string  `json:"type"`
+	Description string  `json:"description"`
+	Impact      string  `json:"impact"`
+	Savings     float64 `json:"potential_savings"`
 }
 
-type InsightsGenerator struct{}
-
-func NewAnalyticsEngine(redis *redis.Client, providerManager *providers.ProviderManager) *AnalyticsEngine {
-    return &AnalyticsEngine{
-        redis:              redis,
-        pollinationsClient: pollinations.NewClient(),
-        providerManager:    providerManager,
-        metricsStore:       NewMetricsStore(redis),
-        insightsGenerator:  NewInsightsGenerator(),
-    }
+// InsightsGenerator generates analytical insights
+type InsightsGenerator struct {
+	logger *logrus.Logger
+	client *pollinations.Client
 }
 
-func NewMetricsStore(redis *redis.Client) *MetricsStore {
-    return &MetricsStore{
-        redis: redis,
-        cache: make(map[string]*CachedMetrics),
-    }
+// NewAnalyticsEngine creates a new analytics engine
+func NewAnalyticsEngine(logger *logrus.Logger, pollinationsClient *pollinations.Client) *AnalyticsEngine {
+	return &AnalyticsEngine{
+		logger:             logger,
+		metricsStore:       NewMetricsStore(),
+		insightsGenerator:  NewInsightsGenerator(logger),
+		pollinationsClient: pollinationsClient,
+	}
 }
 
-func NewInsightsGenerator() *InsightsGenerator {
-    return &InsightsGenerator{}
+// NewMetricsStore creates a new metrics store
+func NewMetricsStore() *MetricsStore {
+	return &MetricsStore{
+		cache:       make(map[string]*CachedMetrics),
+		maxCacheAge: 5 * time.Minute,
+	}
 }
 
-func (ae *AnalyticsEngine) RecordRequest(metrics RequestMetrics) error {
-    // Store in Redis time series if Redis is available
-    if ae.redis != nil {
-        key := fmt.Sprintf("metrics:request:%s", metrics.RequestID)
-        data, err := json.Marshal(metrics)
-        if err != nil {
-            return err
-        }
-        
-        ctx := context.Background()
-        
-        // Store individual request
-        if err := ae.redis.Set(ctx, key, data, 30*24*time.Hour).Err(); err != nil {
-            // Graceful degradation - log but don't fail
-            fmt.Printf("Warning: Failed to store metrics in Redis: %v\n", err)
-        } else {
-            // Update aggregated metrics
-            ae.updateAggregatedMetrics(ctx, metrics)
-        }
-    }
-    
-    return nil
+// NewInsightsGenerator creates a new insights generator
+func NewInsightsGenerator(logger *logrus.Logger) *InsightsGenerator {
+	return &InsightsGenerator{
+		logger: logger,
+		client: pollinations.NewClient(),
+	}
 }
 
-func (ae *AnalyticsEngine) updateAggregatedMetrics(ctx context.Context, metrics RequestMetrics) {
-    if ae.redis == nil {
-        return
-    }
-    
-    // Update provider metrics
-    providerKey := fmt.Sprintf("metrics:provider:%s", metrics.Provider)
-    ae.redis.HIncrBy(ctx, providerKey, "total_requests", 1)
-    
-    if metrics.Success {
-        ae.redis.HIncrBy(ctx, providerKey, "successful_requests", 1)
-    } else {
-        ae.redis.HIncrBy(ctx, providerKey, "failed_requests", 1)
-    }
-    
-    ae.redis.HIncrByFloat(ctx, providerKey, "total_cost", metrics.Cost)
-    ae.redis.HIncrBy(ctx, providerKey, "total_tokens", int64(metrics.TokensUsed))
-    
-    // Update tier metrics
-    tierKey := fmt.Sprintf("metrics:tier:%s", metrics.Tier)
-    ae.redis.HIncrBy(ctx, tierKey, "total_requests", 1)
-    ae.redis.HIncrByFloat(ctx, tierKey, "total_cost", metrics.Cost)
-    
-    // Update user metrics
-    userKey := fmt.Sprintf("metrics:user:%s", metrics.UserID)
-    ae.redis.HIncrBy(ctx, userKey, "total_requests", 1)
-    ae.redis.HIncrByFloat(ctx, userKey, "total_cost", metrics.Cost)
-    
-    // Update daily metrics
-    dayKey := fmt.Sprintf("metrics:daily:%s", time.Now().Format("2006-01-02"))
-    ae.redis.HIncrBy(ctx, dayKey, "total_requests", 1)
-    ae.redis.HIncrByFloat(ctx, dayKey, "total_cost", metrics.Cost)
+// RecordRequest records metrics for a request
+func (ae *AnalyticsEngine) RecordRequest(metrics RequestMetrics) {
+	ae.mutex.Lock()
+	defer ae.mutex.Unlock()
+
+	// Store the metrics (in a real implementation, this would go to a database)
+	cacheKey := fmt.Sprintf("request_%s", metrics.RequestID)
+	ae.metricsStore.Cache(cacheKey, metrics, 24*time.Hour)
+
+	ae.logger.Debugf("Recorded metrics for request %s", metrics.RequestID)
 }
 
-func (ae *AnalyticsEngine) GetProviderPerformance(ctx context.Context, providerName string, period time.Duration) (*ProviderPerformance, error) {
-    // Check cache first
-    cacheKey := fmt.Sprintf("performance:%s:%v", providerName, period)
-    if cached := ae.metricsStore.GetCached(cacheKey); cached != nil {
-        if perf, ok := cached.(*ProviderPerformance); ok {
-            return perf, nil
-        }
-    }
-    
-    // Calculate performance metrics
-    performance := &ProviderPerformance{
-        ProviderName: providerName,
-        Tier:         "community", // Default
-    }
-    
-    // Get provider config for tier
-    if ae.providerManager != nil {
-        if provider, err := ae.providerManager.GetProvider(providerName); err == nil {
-            performance.Tier = provider.Tier
-        }
-    }
-    
-    // Try to fetch metrics from Redis, fallback to mock data
-    if ae.redis != nil {
-        providerKey := fmt.Sprintf("metrics:provider:%s", providerName)
-        metrics, err := ae.redis.HGetAll(ctx, providerKey).Result()
-        if err == nil {
-            // Parse metrics
-            if total, exists := metrics["total_requests"]; exists {
-                fmt.Sscanf(total, "%d", &performance.TotalRequests)
-            }
-            if successful, exists := metrics["successful_requests"]; exists {
-                fmt.Sscanf(successful, "%d", &performance.SuccessfulRequests)
-            }
-            if failed, exists := metrics["failed_requests"]; exists {
-                fmt.Sscanf(failed, "%d", &performance.FailedRequests)
-            }
-            if cost, exists := metrics["total_cost"]; exists {
-                fmt.Sscanf(cost, "%f", &performance.TotalCost)
-            }
-            if tokens, exists := metrics["total_tokens"]; exists {
-                fmt.Sscanf(tokens, "%d", &performance.TotalTokens)
-            }
-        }
-    }
-    
-    // If no real data, use mock data
-    if performance.TotalRequests == 0 {
-        performance.TotalRequests = 100
-        performance.SuccessfulRequests = 95
-        performance.FailedRequests = 5
-        performance.TotalCost = 10.50
-        performance.TotalTokens = 50000
-        performance.AverageQuality = 4.2
-        performance.AverageResponseTime = 500 * time.Millisecond
-        performance.LastUsed = time.Now()
-    }
-    
-    // Calculate derived metrics
-    if performance.TotalRequests > 0 {
-        performance.SuccessRate = float64(performance.SuccessfulRequests) / float64(performance.TotalRequests) * 100
-    }
-    
-    // Set uptime
-    performance.Uptime = 99.5
-    
-    // Cache result
-    ae.metricsStore.Cache(cacheKey, performance, 5*time.Minute)
-    
-    return performance, nil
+// GetSystemMetrics returns overall system metrics
+func (ae *AnalyticsEngine) GetSystemMetrics() map[string]interface{} {
+	ae.mutex.RLock()
+	defer ae.mutex.RUnlock()
+
+	// In a real implementation, this would aggregate data from the database
+	return map[string]interface{}{
+		"total_requests":    1000, // placeholder
+		"successful_requests": 950,
+		"failed_requests":   50,
+		"success_rate":      0.95,
+		"avg_response_time": 1250.5,
+		"total_cost":        125.75,
+		"active_providers":  5,
+		"timestamp":         time.Now().Unix(),
+	}
 }
 
-func (ae *AnalyticsEngine) GetCostAnalysis(ctx context.Context, period string) (*CostAnalysis, error) {
-    analysis := &CostAnalysis{
-        Period:         period,
-        CostByTier:     make(map[string]float64),
-        CostByProvider: make(map[string]float64),
-        CostByUser:     make(map[string]float64),
-    }
-    
-    // Try to get real data from Redis, fallback to mock data
-    if ae.redis != nil && ae.providerManager != nil {
-        // Get all providers
-        providers, _ := ae.providerManager.GetAvailableProviders()
-        
-        // Calculate costs by tier
-        for _, tier := range []string{"official", "community", "unofficial"} {
-            tierKey := fmt.Sprintf("metrics:tier:%s", tier)
-            if cost, err := ae.redis.HGet(ctx, tierKey, "total_cost").Float64(); err == nil {
-                analysis.CostByTier[tier] = cost
-                analysis.TotalCost += cost
-            }
-        }
-        
-        // Calculate costs by provider
-        for _, provider := range providers {
-            providerKey := fmt.Sprintf("metrics:provider:%s", provider.Name)
-            if cost, err := ae.redis.HGet(ctx, providerKey, "total_cost").Float64(); err == nil {
-                analysis.CostByProvider[provider.Name] = cost
-            }
-        }
-    }
-    
-    // If no real data, use mock data
-    if analysis.TotalCost == 0 {
-        analysis.TotalCost = 25.75
-        analysis.CostByTier = map[string]float64{"official": 15.50, "community": 8.25, "unofficial": 2.00}
-        analysis.CostByProvider = map[string]float64{"OpenAI": 15.50, "Pollinations": 8.25, "Local": 2.00}
-        analysis.CostByUser = map[string]float64{"user1": 12.50, "user2": 8.25, "user3": 5.00}
-    }
-    
-    // Calculate savings vs all-official
-    analysis.SavingsVsOfficial = 45.25
-    
-    // Generate optimization opportunities
-    analysis.OptimizationOpportunities = ae.generateOptimizationOpportunities(ctx, analysis)
-    
-    return analysis, nil
+// GetProviderMetrics returns metrics for a specific provider
+func (ae *AnalyticsEngine) GetProviderMetrics(providerID string) map[string]interface{} {
+	ae.mutex.RLock()
+	defer ae.mutex.RUnlock()
+
+	// In a real implementation, this would query the database
+	return map[string]interface{}{
+		"provider_id":       providerID,
+		"total_requests":    200,
+		"successful_requests": 190,
+		"failed_requests":   10,
+		"success_rate":      0.95,
+		"avg_response_time": 1100.0,
+		"total_cost":        25.50,
+		"last_request":      time.Now().Add(-5 * time.Minute).Unix(),
+	}
 }
 
-func (ae *AnalyticsEngine) generateOptimizationOpportunities(ctx context.Context, analysis *CostAnalysis) []OptimizationOpportunity {
-    opportunities := []OptimizationOpportunity{}
-    
-    // Use Pollinations to analyze patterns and suggest optimizations
-    if ae.pollinationsClient != nil {
-        prompt := fmt.Sprintf(`
-Analyze these cost metrics and suggest optimization opportunities:
+// GetProviderPerformance returns performance analysis for all providers
+func (ae *AnalyticsEngine) GetProviderPerformance() []ProviderPerformance {
+	ae.mutex.RLock()
+	defer ae.mutex.RUnlock()
 
-Total Cost: $%.2f
-Cost by Tier: %v
-Cost by Provider: %v
-
-Suggest 3-5 specific optimization opportunities. Return JSON array:
-[
-  {
-    "description": "Move more image generation to unofficial providers",
-    "potential_savings": 0.50,
-    "implementation": "Route simple image requests to Bing DALL-E instead of OpenAI",
-    "impact": "high"
-  }
-]
-`, analysis.TotalCost, analysis.CostByTier, analysis.CostByProvider)
-        
-        response, err := ae.pollinationsClient.GenerateText(ctx, prompt)
-        if err == nil {
-            var suggestions []OptimizationOpportunity
-            if err := json.Unmarshal([]byte(response), &suggestions); err == nil {
-                opportunities = append(opportunities, suggestions...)
-            }
-        }
-    }
-    
-    // Add rule-based opportunities
-    if analysis.CostByTier["official"] > analysis.TotalCost*0.5 {
-        opportunities = append(opportunities, OptimizationOpportunity{
-            Description:      "Reduce reliance on official tier providers",
-            PotentialSavings: analysis.CostByTier["official"] * 0.3,
-            Implementation:   "Adjust complexity thresholds in routing logic",
-            Impact:           "high",
-        })
-    }
-    
-    // Default opportunity if none found
-    if len(opportunities) == 0 {
-        opportunities = append(opportunities, OptimizationOpportunity{
-            Description:      "Route more simple tasks to community providers",
-            PotentialSavings: 5.25,
-            Implementation:   "Adjust complexity thresholds in routing logic",
-            Impact:           "medium",
-        })
-    }
-    
-    return opportunities
+	// In a real implementation, this would aggregate from the database
+	return []ProviderPerformance{
+		{
+			ProviderID:      "pollinations",
+			TotalRequests:   500,
+			SuccessfulReqs:  475,
+			FailedReqs:      25,
+			SuccessRate:     0.95,
+			AvgResponseTime: 1200.0,
+			TotalCost:       50.25,
+			LastUpdated:     time.Now(),
+		},
+		{
+			ProviderID:      "openai",
+			TotalRequests:   300,
+			SuccessfulReqs:  285,
+			FailedReqs:      15,
+			SuccessRate:     0.95,
+			AvgResponseTime: 800.0,
+			TotalCost:       75.50,
+			LastUpdated:     time.Now(),
+		},
+	}
 }
 
+// GetCostAnalysis returns cost analysis for the specified time period
+func (ae *AnalyticsEngine) GetCostAnalysis(since time.Time) CostAnalysis {
+	ae.mutex.RLock()
+	defer ae.mutex.RUnlock()
+
+	// In a real implementation, this would aggregate from the database
+	return CostAnalysis{
+		TotalCost: 125.75,
+		CostByProvider: map[string]float64{
+			"pollinations": 50.25,
+			"openai":       75.50,
+		},
+		CostByModel: map[string]float64{
+			"gpt-4":     75.50,
+			"pollinations": 50.25,
+		},
+		CostTrend: []CostDataPoint{
+			{Timestamp: time.Now().Add(-24 * time.Hour), Cost: 100.00},
+			{Timestamp: time.Now().Add(-12 * time.Hour), Cost: 112.50},
+			{Timestamp: time.Now(), Cost: 125.75},
+		},
+		Recommendations: []OptimizationOpportunity{
+			{
+				Type:        "model_optimization",
+				Description: "Consider using more cost-effective models for simple tasks",
+				Impact:      "medium",
+				Savings:     15.25,
+			},
+		},
+		Period: fmt.Sprintf("Since %s", since.Format("2006-01-02 15:04:05")),
+	}
+}
+
+// GenerateInsights generates analytical insights using AI
+func (ae *AnalyticsEngine) GenerateInsights() ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	prompt := `Analyze the following system metrics and provide 3-5 key insights and recommendations:
+
+System Performance:
+- Total requests: 1000
+- Success rate: 95%
+- Average response time: 1250ms
+- Total cost: $125.75
+
+Provider Performance:
+- Pollinations: 500 requests, 95% success, $50.25 cost
+- OpenAI: 300 requests, 95% success, $75.50 cost
+
+Provide actionable insights for system optimization.`
+
+	if ae.pollinationsClient == nil {
+		// Fallback to static insights if no client available
+		return []string{
+			"System is performing well with 95% success rate",
+			"Consider load balancing between providers for better cost efficiency",
+			"Monitor response times to identify potential bottlenecks",
+		}, nil
+	}
+
+	response, err := ae.pollinationsClient.GenerateText(ctx, prompt)
+	if err != nil {
+		ae.logger.Errorf("Failed to generate insights: %v", err)
+		// Return fallback insights
+		return []string{
+			"System metrics indicate stable performance",
+			"Cost optimization opportunities may exist",
+			"Regular monitoring recommended",
+		}, nil
+	}
+
+	// Parse response into insights (simplified)
+	insights := []string{response}
+	return insights, nil
+}
+
+// Cache stores data in the metrics cache
 func (ms *MetricsStore) Cache(key string, data interface{}, ttl time.Duration) {
-    ms.mu.Lock()
-    defer ms.mu.Unlock()
-    
-    ms.cache[key] = &CachedMetrics{
-        Data:      data,
-        UpdatedAt: time.Now(),
-        TTL:       ttl,
-    }
+	ms.cacheMutex.Lock()
+	defer ms.cacheMutex.Unlock()
+
+	ms.cache[key] = &CachedMetrics{
+		Data:      data,
+		Timestamp: time.Now(),
+		TTL:       ttl,
+	}
 }
 
-func (ms *MetricsStore) GetCached(key string) interface{} {
-    ms.mu.RLock()
-    defer ms.mu.RUnlock()
-    
-    if cached, exists := ms.cache[key]; exists {
-        if time.Since(cached.UpdatedAt) < cached.TTL {
-            return cached.Data
-        }
-    }
-    
-    return nil
+// GetCached retrieves data from the cache
+func (ms *MetricsStore) GetCached(key string) (interface{}, bool) {
+	ms.cacheMutex.RLock()
+	defer ms.cacheMutex.RUnlock()
+
+	cached, exists := ms.cache[key]
+	if !exists {
+		return nil, false
+	}
+
+	// Check if cache entry has expired
+	if time.Since(cached.Timestamp) > cached.TTL {
+		delete(ms.cache, key)
+		return nil, false
+	}
+
+	return cached.Data, true
 }
 
-func (ig *InsightsGenerator) GenerateInsights(ctx context.Context, metrics map[string]interface{}) ([]string, error) {
-    // This would use Pollinations to generate intelligent insights
-    insights := []string{
-        "Provider performance is stable across all tiers",
-        "Cost optimization is working effectively with 65% savings",
-        "Response times are within acceptable limits",
-        "Consider routing more creative tasks to community providers",
-    }
-    
-    return insights, nil
+// GenerateInsights generates insights using the insights generator
+func (ig *InsightsGenerator) GenerateInsights(ctx context.Context, data map[string]interface{}) ([]string, error) {
+	prompt := fmt.Sprintf("Analyze this system data and provide insights: %v", data)
+	
+	response, err := ig.client.GenerateText(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate insights: %w", err)
+	}
+
+	// Simple parsing - in reality, you'd want more sophisticated parsing
+	return []string{response}, nil
 }
