@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Your-PaL-MoE/internal/types"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/types"
 )
 
 // TestPrompt represents a test case with expected behavior

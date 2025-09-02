@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Your-PaL-MoE/pkg/analysis"
-	"github.com/Your-PaL-MoE/pkg/config"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/analysis"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/config"
 )
 
 // ProviderScore represents the scoring result for a provider

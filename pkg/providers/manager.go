@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Your-PaL-MoE/internal/types"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/types"
 )
 
 // ProviderManager manages AI providers

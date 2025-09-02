@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/Your-PaL-MoE/internal/enhanced"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/enhanced"
 )
 
 // Test script to verify the enhanced system functionality

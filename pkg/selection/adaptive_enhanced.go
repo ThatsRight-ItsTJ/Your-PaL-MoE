@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Your-PaL-MoE/pkg/analysis"
-	"github.com/Your-PaL-MoE/pkg/config"
-	"github.com/Your-PaL-MoE/pkg/providers"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/analysis"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/config"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/providers"
 )
 
 // EnhancedAdaptiveSelector implements intelligent provider selection with capability filtering

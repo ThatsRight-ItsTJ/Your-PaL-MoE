@@ -8,8 +8,8 @@ import (
     "time"
 
     "github.com/go-redis/redis/v8"
-    "github.com/Your-PaL-MoE/pkg/pollinations"
-    "github.com/Your-PaL-MoE/pkg/providers"
+    "github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/pollinations"
+    "github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/providers"
 )
 
 type AnalyticsEngine struct {

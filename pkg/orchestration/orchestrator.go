@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Your-PaL-MoE/pkg/analysis"
-	"github.com/Your-PaL-MoE/pkg/modes"
-	"github.com/Your-PaL-MoE/pkg/optimization"
-	"github.com/Your-PaL-MoE/pkg/selection"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/analysis"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/modes"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/optimization"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/selection"
 )
 
 // Task represents a unit of work in the orchestration system

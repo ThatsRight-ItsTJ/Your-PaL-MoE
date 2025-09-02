@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Your-PaL-MoE/internal/enhanced"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/enhanced"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )

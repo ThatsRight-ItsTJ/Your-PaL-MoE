@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/Your-PaL-MoE/internal/enhanced"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/enhanced"
 )
 
 func main() {
