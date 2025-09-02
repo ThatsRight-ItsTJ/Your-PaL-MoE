@@ -6,7 +6,6 @@ import (
 
 	"github.com/labring/aiproxy/core/model"
 	log "github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 )
 
 // StartKeyRotationService - Key rotation service
@@ -95,7 +94,6 @@ func StartUsageResetService(ctx context.Context) {
 
 func resetDailyUsage() {
 	now := time.Now()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	
 	// Reset daily usage counters at midnight
 	if now.Hour() == 0 && now.Minute() < 5 { // 5-minute window
@@ -231,10 +229,10 @@ func aggregateUsageAnalytics() {
 	
 	// Aggregate audit logs for the last hour
 	var stats struct {
-		TotalRequests    int64
+		TotalRequests      int64
 		SuccessfulRequests int64
-		FailedRequests   int64
-		UniqueTokens     int64
+		FailedRequests     int64
+		UniqueTokens       int64
 	}
 
 	err := model.DB.Model(&model.AuditLog{}).

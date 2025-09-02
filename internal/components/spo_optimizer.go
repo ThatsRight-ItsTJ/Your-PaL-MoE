@@ -9,14 +9,26 @@ import (
 	"time"
 
 	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/types"
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/config"
 
 	"github.com/sirupsen/logrus"
 )
 
+// Config represents the configuration for SPO optimizer
+type Config struct {
+	SPO SPOConfig `json:"spo"`
+}
+
+type SPOConfig struct {
+	MaxIterations    int     `json:"max_iterations"`
+	SamplesPerRound  int     `json:"samples_per_round"`
+	ConvergenceRate  float64 `json:"convergence_rate"`
+	CacheTTL         int     `json:"cache_ttl"`
+	CacheSize        int     `json:"cache_size"`
+}
+
 // SPOOptimizer implements self-supervised prompt optimization
 type SPOOptimizer struct {
-	config *config.Config
+	config *Config
 	logger *logrus.Logger
 
 	// Cache for optimization results
@@ -50,7 +62,20 @@ type OptimizationAttempt struct {
 }
 
 // NewSPOOptimizer creates a new SPO optimizer
-func NewSPOOptimizer(cfg *config.Config, logger *logrus.Logger) (*SPOOptimizer, error) {
+func NewSPOOptimizer(cfg *Config, logger *logrus.Logger) (*SPOOptimizer, error) {
+	// Use default config if not provided
+	if cfg == nil {
+		cfg = &Config{
+			SPO: SPOConfig{
+				MaxIterations:   5,
+				SamplesPerRound: 3,
+				ConvergenceRate: 0.1,
+				CacheTTL:        3600,
+				CacheSize:       1000,
+			},
+		}
+	}
+
 	optimizer := &SPOOptimizer{
 		config:              cfg,
 		logger:              logger,

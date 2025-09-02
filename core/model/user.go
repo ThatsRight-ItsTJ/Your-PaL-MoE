@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/labring/aiproxy/core/common"
-	log "github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 )
 
 const (
