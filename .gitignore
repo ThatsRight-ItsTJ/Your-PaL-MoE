@@ -7,3 +7,6 @@ comma_test.csv
 enhanced-server
 multi_model_test.csv
 providers.csv
+go.mod
+go.sum
+go.work.sum
