@@ -10,12 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/providers"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/config"
 )
 
-// EnhancedProviderLoader handles loading providers with enhanced capabilities
 type EnhancedProviderLoader struct {
-	providers       []providers.ProviderConfig
+	providers       []config.ProviderConfig
 	lastLoadTime    time.Time
 	cacheExpiration time.Duration
 }
@@ -23,13 +22,13 @@ type EnhancedProviderLoader struct {
 // NewEnhancedProviderLoader creates a new enhanced provider loader
 func NewEnhancedProviderLoader() *EnhancedProviderLoader {
 	return &EnhancedProviderLoader{
-		providers:       make([]providers.ProviderConfig, 0),
+		providers:       make([]config.ProviderConfig, 0),
 		cacheExpiration: 5 * time.Minute,
 	}
 }
 
 // LoadProvidersFromCSV loads providers from CSV file
-func LoadProvidersFromCSV(filename string) ([]providers.ProviderConfig, error) {
+func LoadProvidersFromCSV(filename string) ([]config.ProviderConfig, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open CSV file: %w", err)
@@ -37,7 +36,7 @@ func LoadProvidersFromCSV(filename string) ([]providers.ProviderConfig, error) {
 	defer file.Close()
 
 	reader := csv.NewReader(file)
-	var providersList []providers.ProviderConfig
+	var providersList []config.ProviderConfig
 
 	// Read header
 	header, err := reader.Read()
@@ -62,14 +61,17 @@ func LoadProvidersFromCSV(filename string) ([]providers.ProviderConfig, error) {
 			continue
 		}
 
-		provider := providers.ProviderConfig{}
+		provider := config.ProviderConfig{}
 
 		// Map CSV columns to provider fields
 		if idx, exists := columnIndex["name"]; exists && idx < len(record) {
 			provider.Name = strings.TrimSpace(record[idx])
 		}
-		if idx, exists := columnIndex["url"]; exists && idx < len(record) {
-			provider.URL = strings.TrimSpace(record[idx])
+		if idx, exists := columnIndex["tier"]; exists && idx < len(record) {
+			provider.Tier = strings.TrimSpace(record[idx])
+		}
+		if idx, exists := columnIndex["endpoint"]; exists && idx < len(record) {
+			provider.Endpoint = strings.TrimSpace(record[idx])
 		}
 		if idx, exists := columnIndex["api_key"]; exists && idx < len(record) {
 			provider.APIKey = strings.TrimSpace(record[idx])
@@ -79,13 +81,8 @@ func LoadProvidersFromCSV(filename string) ([]providers.ProviderConfig, error) {
 				provider.Priority = priority
 			}
 		}
-		if idx, exists := columnIndex["enabled"]; exists && idx < len(record) {
-			enabled := strings.ToLower(strings.TrimSpace(record[idx]))
-			provider.Enabled = enabled == "true" || enabled == "1" || enabled == "yes"
-		} else {
-			provider.Enabled = true // Default to enabled
-		}
 
+		// Phase 1: ignore Enabled/URL; only require Name for validity
 		if provider.Name != "" {
 			providersList = append(providersList, provider)
 		}
@@ -95,13 +92,11 @@ func LoadProvidersFromCSV(filename string) ([]providers.ProviderConfig, error) {
 }
 
 // LoadProviders loads providers with caching
-func (epl *EnhancedProviderLoader) LoadProviders(filename string) ([]providers.ProviderConfig, error) {
-	// Check if cache is still valid
+func (epl *EnhancedProviderLoader) LoadProviders(filename string) ([]config.ProviderConfig, error) {
 	if time.Since(epl.lastLoadTime) < epl.cacheExpiration && len(epl.providers) > 0 {
 		return epl.providers, nil
 	}
 
-	// Load fresh data
 	newProviders, err := LoadProvidersFromCSV(filename)
 	if err != nil {
 		return nil, err
@@ -114,24 +109,19 @@ func (epl *EnhancedProviderLoader) LoadProviders(filename string) ([]providers.P
 }
 
 // GetProviderByName finds a provider by name
-func (epl *EnhancedProviderLoader) GetProviderByName(name string) (*providers.ProviderConfig, error) {
-	for _, provider := range epl.providers {
-		if strings.EqualFold(provider.Name, name) {
-			return &provider, nil
+func (epl *EnhancedProviderLoader) GetProviderByName(name string) (*config.ProviderConfig, error) {
+	for i := range epl.providers {
+		if strings.EqualFold(epl.providers[i].Name, name) {
+			return &epl.providers[i], nil
 		}
 	}
 	return nil, fmt.Errorf("provider %s not found", name)
 }
 
 // GetEnabledProviders returns only enabled providers
-func (epl *EnhancedProviderLoader) GetEnabledProviders() []providers.ProviderConfig {
-	var enabled []providers.ProviderConfig
-	for _, provider := range epl.providers {
-		if provider.Enabled {
-			enabled = append(enabled, provider)
-		}
-	}
-	return enabled
+func (epl *EnhancedProviderLoader) GetEnabledProviders() []config.ProviderConfig {
+	// Phase 1: treat all as enabled
+	return epl.providers
 }
 
 // RefreshProviders forces a refresh of provider data
@@ -144,15 +134,15 @@ func (epl *EnhancedProviderLoader) RefreshProviders(filename string) error {
 // GetProviderStats returns statistics about loaded providers
 func (epl *EnhancedProviderLoader) GetProviderStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	
+
 	total := len(epl.providers)
 	enabled := len(epl.GetEnabledProviders())
-	
+
 	stats["total_providers"] = total
 	stats["enabled_providers"] = enabled
 	stats["disabled_providers"] = total - enabled
 	stats["last_load_time"] = epl.lastLoadTime
 	stats["cache_expiration"] = epl.cacheExpiration
-	
+
 	return stats
 }

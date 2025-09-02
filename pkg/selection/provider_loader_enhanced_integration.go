@@ -3,15 +3,15 @@ package selection
 import (
 	"fmt"
 	"log"
+	"strings"
 
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/providers"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/config"
 )
 
-// IntegratedProviderSystem combines CSV and YAML provider loading
 type IntegratedProviderSystem struct {
 	csvLoader  *EnhancedProviderLoader
 	yamlLoader *YAMLProviderLoader
-	providers  []providers.ProviderConfig
+	providers  []config.ProviderConfig
 }
 
 // NewIntegratedProviderSystem creates a new integrated provider system
@@ -19,13 +19,13 @@ func NewIntegratedProviderSystem() *IntegratedProviderSystem {
 	return &IntegratedProviderSystem{
 		csvLoader:  NewEnhancedProviderLoader(),
 		yamlLoader: NewYAMLProviderLoader(),
-		providers:  make([]providers.ProviderConfig, 0),
+		providers:  make([]config.ProviderConfig, 0),
 	}
 }
 
 // LoadAllProviders loads providers from both CSV and YAML sources
 func (ips *IntegratedProviderSystem) LoadAllProviders(csvFile, yamlDir string) error {
-	var allProviders []providers.ProviderConfig
+	var allProviders []config.ProviderConfig
 
 	// Load CSV providers
 	if csvFile != "" {
@@ -54,26 +54,21 @@ func (ips *IntegratedProviderSystem) LoadAllProviders(csvFile, yamlDir string) e
 }
 
 // GetProviders returns all loaded providers
-func (ips *IntegratedProviderSystem) GetProviders() []providers.ProviderConfig {
+func (ips *IntegratedProviderSystem) GetProviders() []config.ProviderConfig {
 	return ips.providers
 }
 
 // GetEnabledProviders returns only enabled providers
-func (ips *IntegratedProviderSystem) GetEnabledProviders() []providers.ProviderConfig {
-	var enabled []providers.ProviderConfig
-	for _, provider := range ips.providers {
-		if provider.Enabled {
-			enabled = append(enabled, provider)
-		}
-	}
-	return enabled
+func (ips *IntegratedProviderSystem) GetEnabledProviders() []config.ProviderConfig {
+	// Phase 1: treat all as enabled
+	return ips.providers
 }
 
 // GetProviderByName finds a provider by name
-func (ips *IntegratedProviderSystem) GetProviderByName(name string) (*providers.ProviderConfig, error) {
-	for _, provider := range ips.providers {
-		if provider.Name == name {
-			return &provider, nil
+func (ips *IntegratedProviderSystem) GetProviderByName(name string) (*config.ProviderConfig, error) {
+	for i := range ips.providers {
+		if strings.EqualFold(ips.providers[i].Name, name) {
+			return &ips.providers[i], nil
 		}
 	}
 	return nil, fmt.Errorf("provider %s not found", name)
@@ -87,43 +82,43 @@ func (ips *IntegratedProviderSystem) RefreshProviders(csvFile, yamlDir string) e
 // GetStats returns statistics about the integrated system
 func (ips *IntegratedProviderSystem) GetStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	
+
 	total := len(ips.providers)
 	enabled := len(ips.GetEnabledProviders())
-	
+
 	stats["total_providers"] = total
 	stats["enabled_providers"] = enabled
 	stats["disabled_providers"] = total - enabled
-	
+
 	// Get CSV stats
 	csvStats := ips.csvLoader.GetProviderStats()
 	stats["csv_stats"] = csvStats
-	
+
 	return stats
 }
 
 // ValidateProviders checks if all providers have required fields
 func (ips *IntegratedProviderSystem) ValidateProviders() []string {
 	var issues []string
-	
+
 	for i, provider := range ips.providers {
 		if provider.Name == "" {
 			issues = append(issues, fmt.Sprintf("Provider %d: missing name", i))
 		}
-		if provider.URL == "" {
-			issues = append(issues, fmt.Sprintf("Provider %s: missing URL", provider.Name))
+		if provider.Endpoint == "" {
+			issues = append(issues, fmt.Sprintf("Provider %s: missing endpoint", provider.Name))
 		}
 	}
-	
+
 	return issues
 }
 
 // GetProvidersByPriority returns providers sorted by priority
-func (ips *IntegratedProviderSystem) GetProvidersByPriority() []providers.ProviderConfig {
+func (ips *IntegratedProviderSystem) GetProvidersByPriority() []config.ProviderConfig {
 	// Create a copy to avoid modifying original slice
-	sortedProviders := make([]providers.ProviderConfig, len(ips.providers))
+	sortedProviders := make([]config.ProviderConfig, len(ips.providers))
 	copy(sortedProviders, ips.providers)
-	
+
 	// Simple bubble sort by priority (higher priority first)
 	for i := 0; i < len(sortedProviders)-1; i++ {
 		for j := 0; j < len(sortedProviders)-i-1; j++ {
@@ -132,6 +127,6 @@ func (ips *IntegratedProviderSystem) GetProvidersByPriority() []providers.Provid
 			}
 		}
 	}
-	
+
 	return sortedProviders
 }

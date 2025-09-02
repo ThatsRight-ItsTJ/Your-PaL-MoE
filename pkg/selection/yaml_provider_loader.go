@@ -7,21 +7,21 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/providers"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/config"
 	"gopkg.in/yaml.v2"
 )
 
 // YAMLProviderConfig represents the YAML structure for provider configuration
 type YAMLProviderConfig struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description"`
-	URL         string   `yaml:"url"`
-	APIKey      string   `yaml:"api_key"`
-	Source      string   `yaml:"source"`
-	Models      []string `yaml:"models"`
-	Priority    int      `yaml:"priority"`
-	Enabled     bool     `yaml:"enabled"`
-	Type        string   `yaml:"type"`
+	Name        string            `yaml:"name"`
+	Description string            `yaml:"description"`
+	Endpoint    string            `yaml:"url"`
+	APIKey      string            `yaml:"api_key"`
+	Source      string            `yaml:"source"`
+	Models      []string          `yaml:"models"`
+	Priority    int               `yaml:"priority"`
+	Enabled     bool              `yaml:"enabled"`
+	Type        string            `yaml:"type"`
 	Headers     map[string]string `yaml:"headers"`
 }
 
@@ -38,7 +38,7 @@ func NewYAMLProviderLoader() *YAMLProviderLoader {
 }
 
 // LoadProviderFromYAML loads a single provider from YAML file
-func (ypl *YAMLProviderLoader) LoadProviderFromYAML(filename string) (*providers.ProviderConfig, error) {
+func (ypl *YAMLProviderLoader) LoadProviderFromYAML(filename string) (*config.ProviderConfig, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read YAML file %s: %w", filename, err)
@@ -49,41 +49,24 @@ func (ypl *YAMLProviderLoader) LoadProviderFromYAML(filename string) (*providers
 		return nil, fmt.Errorf("failed to parse YAML file %s: %w", filename, err)
 	}
 
-	// Convert YAML config to ProviderConfig
-	provider := &providers.ProviderConfig{
-		Name:        yamlConfig.Name,
-		Description: yamlConfig.Description,
-		URL:         yamlConfig.URL,
-		APIKey:      yamlConfig.APIKey,
-		Priority:    yamlConfig.Priority,
-		Enabled:     yamlConfig.Enabled,
-		Type:        yamlConfig.Type,
-		Headers:     yamlConfig.Headers,
+	// Convert YAML config to canonical ProviderConfig (config.ProviderConfig)
+	provider := &config.ProviderConfig{
+		Name:     yamlConfig.Name,
+		Endpoint: yamlConfig.Endpoint,
+		APIKey:   yamlConfig.APIKey,
+		Priority: yamlConfig.Priority,
+		Metadata: map[string]string{
+			"source": yamlConfig.Source,
+		},
 	}
-
-	// If source URL is provided, fetch dynamic models
-	if yamlConfig.Source != "" {
-		log.Printf("Fetching dynamic models from: %s", yamlConfig.Source)
-		dynamicModels, err := ypl.dynamicLoader.FetchModels(yamlConfig.Source)
-		if err != nil {
-			log.Printf("Warning: Failed to fetch dynamic models from %s: %v", yamlConfig.Source, err)
-			// Fall back to static models if dynamic fetch fails
-			provider.Models = yamlConfig.Models
-		} else {
-			provider.Models = dynamicModels
-			log.Printf("Successfully loaded %d dynamic models for provider %s", len(dynamicModels), yamlConfig.Name)
-		}
-	} else {
-		// Use static models from YAML
-		provider.Models = yamlConfig.Models
-	}
-
+	// Do not populate optional fields like Capabilities or CostTracking here.
+	// Models are not stored on the canonical ProviderConfig in this pass.
 	return provider, nil
 }
 
 // LoadProvidersFromDirectory loads all YAML providers from a directory
-func (ypl *YAMLProviderLoader) LoadProvidersFromDirectory(directory string) ([]providers.ProviderConfig, error) {
-	var providersList []providers.ProviderConfig
+func (ypl *YAMLProviderLoader) LoadProvidersFromDirectory(directory string) ([]config.ProviderConfig, error) {
+	var providersList []config.ProviderConfig
 
 	files, err := ioutil.ReadDir(directory)
 	if err != nil {
@@ -117,18 +100,13 @@ func (ypl *YAMLProviderLoader) LoadProvidersFromDirectory(directory string) ([]p
 }
 
 // RefreshDynamicModels refreshes models for providers with dynamic sources
-func (ypl *YAMLProviderLoader) RefreshDynamicModels(provider *providers.ProviderConfig, sourceURL string) error {
+func (ypl *YAMLProviderLoader) RefreshDynamicModels(provider *config.ProviderConfig, sourceURL string) error {
 	if sourceURL == "" {
 		return fmt.Errorf("no source URL provided for dynamic model refresh")
 	}
 
-	models, err := ypl.dynamicLoader.FetchModels(sourceURL)
-	if err != nil {
-		return fmt.Errorf("failed to refresh dynamic models: %w", err)
-	}
-
-	provider.Models = models
-	log.Printf("Refreshed %d models for provider %s", len(models), provider.Name)
+	// Phase 1: dynamic models loading is not implemented; skip
+	log.Printf("Dynamic model refresh skipped for provider %s in Phase 1", provider.Name)
 	return nil
 }
 
@@ -140,7 +118,7 @@ func (ypl *YAMLProviderLoader) ValidateYAMLProvider(provider *YAMLProviderConfig
 		issues = append(issues, "provider name is required")
 	}
 
-	if provider.URL == "" && provider.Source == "" {
+	if provider.Endpoint == "" && provider.Source == "" {
 		issues = append(issues, "either URL or source is required")
 	}
 

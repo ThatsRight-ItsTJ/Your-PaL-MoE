@@ -17,6 +17,8 @@ type ProviderConfig struct {
 	Name         string       `yaml:"name"`
 	Tier         string       `yaml:"tier"`
 	Endpoint     string       `yaml:"endpoint"`
+	APIKey       string       `yaml:"api_key"`
+	Priority     int          `yaml:"priority"`
 	Capabilities Capabilities `yaml:"capabilities"`
 	CostTracking CostTracking `yaml:"cost_tracking"`
 	Metadata     map[string]string `yaml:"metadata"`
