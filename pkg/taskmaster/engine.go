@@ -3,385 +3,341 @@ package taskmaster
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/types"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/selection"
+	"github.com/sirupsen/logrus"
 )
 
-// TaskRequest represents a user request that needs to be processed
-type TaskRequest struct {
-	ID         string                 `json:"id"`
-	UserPrompt string                 `json:"user_prompt"`
-	Options    TaskOptions            `json:"options"`
-	Metadata   map[string]interface{} `json:"metadata"`
+type TaskMaster struct {
+	selector    *selection.EnhancedAdaptiveSelector
+	activeJobs  map[string]*JobExecution
+	jobsMutex   sync.RWMutex
+	logger      *logrus.Logger
+	maxWorkers  int
+	workerPool  chan struct{}
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
-// TaskOptions contains configuration for task processing
-type TaskOptions struct {
-	CostOptimization string        `json:"cost_optimization"` // "aggressive", "balanced", "quality"
-	Timeout          time.Duration `json:"timeout"`
-	ParallelExecution bool         `json:"parallel_execution"`
-	ProviderPreference []string    `json:"provider_preference"`
-	MaxCost          float64       `json:"max_cost"`
+type JobExecution struct {
+	ID          string
+	Status      JobStatus
+	StartTime   time.Time
+	EndTime     *time.Time
+	Result      interface{}
+	Error       error
+	Progress    float64
+	Metadata    map[string]interface{}
+	mutex       sync.RWMutex
 }
 
-// TaskPlan represents a decomposed task execution plan
-type TaskPlan struct {
-	ID       string    `json:"id"`
-	Tasks    []Task    `json:"tasks"`
+type JobStatus string
+
+const (
+	JobStatusPending   JobStatus = "pending"
+	JobStatusRunning   JobStatus = "running"
+	JobStatusCompleted JobStatus = "completed"
+	JobStatusFailed    JobStatus = "failed"
+	JobStatusCancelled JobStatus = "cancelled"
+)
+
+type JobRequest struct {
+	ID       string                 `json:"id"`
+	Type     string                 `json:"type"`
+	Input    types.RequestInput     `json:"input"`
+	Priority int                    `json:"priority"`
 	Metadata map[string]interface{} `json:"metadata"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
-// Task represents an individual task in the execution plan
-type Task struct {
+type JobResult struct {
 	ID       string      `json:"id"`
-	Type     string      `json:"type"` // "chat_completion", "image_generation", "analysis", etc.
-	Provider string      `json:"provider"`
-	Request  interface{} `json:"request"`
-	Priority int         `json:"priority"`
-	Dependencies []string `json:"dependencies"`
+	Status   JobStatus   `json:"status"`
+	Result   interface{} `json:"result,omitempty"`
+	Error    string      `json:"error,omitempty"`
+	Progress float64     `json:"progress"`
+	Duration string      `json:"duration,omitempty"`
 }
 
-// TaskResult represents the result of executing a task plan
-type TaskResult struct {
-	Success    bool                   `json:"success"`
-	Data       interface{}            `json:"data"`
-	Error      string                 `json:"error,omitempty"`
-	Cost       float64                `json:"cost"`
-	Duration   time.Duration          `json:"duration"`
-	TaskResults map[string]interface{} `json:"task_results"`
-}
-
-// TaskEngine is the main engine for task decomposition and execution
-type TaskEngine struct {
-	config    *EngineConfig
-	providers map[string]interface{}
-	mutex     sync.RWMutex
-}
-
-// EngineConfig contains configuration for the task engine
-type EngineConfig struct {
-	MaxParallelTasks    int           `json:"max_parallel_tasks"`
-	DefaultTimeout      time.Duration `json:"default_timeout"`
-	CostOptimization    bool          `json:"cost_optimization"`
-	ProviderHealthCheck bool          `json:"provider_health_check"`
-}
-
-// NewTaskEngine creates a new task engine instance
-func NewTaskEngine(config *EngineConfig) *TaskEngine {
-	if config == nil {
-		config = &EngineConfig{
-			MaxParallelTasks:    5,
-			DefaultTimeout:      60 * time.Second,
-			CostOptimization:    true,
-			ProviderHealthCheck: true,
-		}
-	}
-
-	return &TaskEngine{
-		config:    config,
-		providers: make(map[string]interface{}),
+func NewTaskMaster(selector *selection.EnhancedAdaptiveSelector, logger *logrus.Logger, maxWorkers int) *TaskMaster {
+	ctx, cancel := context.WithCancel(context.Background())
+	
+	return &TaskMaster{
+		selector:   selector,
+		activeJobs: make(map[string]*JobExecution),
+		logger:     logger,
+		maxWorkers: maxWorkers,
+		workerPool: make(chan struct{}, maxWorkers),
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 }
 
-// CreateTaskPlan analyzes a request and creates an optimized execution plan
-func (e *TaskEngine) CreateTaskPlan(ctx context.Context, request TaskRequest) (*TaskPlan, error) {
-	// Analyze the user prompt to determine task types
-	taskTypes := e.analyzePrompt(request.UserPrompt)
+func (tm *TaskMaster) Start() error {
+	tm.logger.Info("TaskMaster starting...")
 	
-	// Create tasks based on analysis
-	tasks := make([]Task, 0)
-	for i, taskType := range taskTypes {
-		task := Task{
-			ID:       fmt.Sprintf("%s_task_%d", request.ID, i+1),
-			Type:     taskType,
-			Request:  e.createTaskRequest(taskType, request.UserPrompt, request.Options),
-			Priority: e.calculatePriority(taskType, request.Options),
-		}
-		
-		// Assign optimal provider based on cost optimization
-		provider, err := e.selectOptimalProvider(taskType, request.Options)
-		if err != nil {
-			return nil, fmt.Errorf("failed to select provider for task %s: %w", task.ID, err)
-		}
-		task.Provider = provider
-		
-		tasks = append(tasks, task)
+	// Initialize worker pool
+	for i := 0; i < tm.maxWorkers; i++ {
+		tm.workerPool <- struct{}{}
 	}
 	
-	// Create execution plan
-	plan := &TaskPlan{
-		ID:        request.ID,
-		Tasks:     tasks,
-		CreatedAt: time.Now(),
-		Metadata: map[string]interface{}{
-			"cost_optimization": request.Options.CostOptimization,
-			"parallel_execution": request.Options.ParallelExecution,
-			"original_prompt": request.UserPrompt,
-		},
-	}
-	
-	return plan, nil
+	tm.logger.Infof("TaskMaster started with %d workers", tm.maxWorkers)
+	return nil
 }
 
-// ExecuteTaskPlan executes a task plan and returns the aggregated result
-func (e *TaskEngine) ExecuteTaskPlan(ctx context.Context, plan *TaskPlan) (*TaskResult, error) {
-	start := time.Now()
+func (tm *TaskMaster) Stop() error {
+	tm.logger.Info("TaskMaster stopping...")
+	tm.cancel()
 	
-	result := &TaskResult{
-		TaskResults: make(map[string]interface{}),
-	}
+	// Wait for active jobs to complete or timeout
+	timeout := time.NewTimer(30 * time.Second)
+	defer timeout.Stop()
 	
-	// Execute tasks based on plan configuration
-	if plan.Metadata["parallel_execution"] == true && len(plan.Tasks) > 1 {
-		return e.executeTasksParallel(ctx, plan)
-	} else {
-		return e.executeTasksSequential(ctx, plan)
-	}
-}
-
-// executeTasksParallel executes tasks in parallel
-func (e *TaskEngine) executeTasksParallel(ctx context.Context, plan *TaskPlan) (*TaskResult, error) {
-	start := time.Now()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	
-	var wg sync.WaitGroup
-	var mutex sync.Mutex
-	
-	results := make(map[string]interface{})
-	errors := make([]error, 0)
-	totalCost := 0.0
-	
-	// Limit concurrent tasks
-	semaphore := make(chan struct{}, e.config.MaxParallelTasks)
-	
-	for _, task := range plan.Tasks {
-		wg.Add(1)
-		go func(t Task) {
-			defer wg.Done()
-			
-			// Acquire semaphore
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-			
-			// Execute individual task
-			taskResult, err := e.executeIndividualTask(ctx, t)
-			
-			mutex.Lock()
-			defer mutex.Unlock()
-			
-			if err != nil {
-				errors = append(errors, err)
-			} else {
-				results[t.ID] = taskResult
-				if cost, ok := taskResult.(map[string]interface{})["cost"].(float64); ok {
-					totalCost += cost
-				}
+	for {
+		select {
+		case <-timeout.C:
+			tm.logger.Warn("TaskMaster stop timeout reached, forcing shutdown")
+			return nil
+		case <-ticker.C:
+			if tm.getActiveJobCount() == 0 {
+				tm.logger.Info("TaskMaster stopped")
+				return nil
 			}
-		}(task)
-	}
-	
-	wg.Wait()
-	
-	// Aggregate results
-	result := &TaskResult{
-		Success:     len(errors) == 0,
-		TaskResults: results,
-		Cost:        totalCost,
-		Duration:    time.Since(start),
-	}
-	
-	if len(errors) > 0 {
-		result.Error = fmt.Sprintf("Failed to execute %d tasks", len(errors))
-		return result, nil
-	}
-	
-	// Aggregate task outputs into final response
-	result.Data = e.aggregateTaskResults(results)
-	
-	return result, nil
-}
-
-// executeTasksSequential executes tasks one by one
-func (e *TaskEngine) executeTasksSequential(ctx context.Context, plan *TaskPlan) (*TaskResult, error) {
-	start := time.Now()
-	
-	results := make(map[string]interface{})
-	totalCost := 0.0
-	
-	for _, task := range plan.Tasks {
-		taskResult, err := e.executeIndividualTask(ctx, task)
-		if err != nil {
-			return &TaskResult{
-				Success:  false,
-				Error:    fmt.Sprintf("Task %s failed: %v", task.ID, err),
-				Duration: time.Since(start),
-			}, nil
-		}
-		
-		results[task.ID] = taskResult
-		if cost, ok := taskResult.(map[string]interface{})["cost"].(float64); ok {
-			totalCost += cost
 		}
 	}
-	
-	result := &TaskResult{
-		Success:     true,
-		TaskResults: results,
-		Cost:        totalCost,
-		Duration:    time.Since(start),
-	}
-	
-	result.Data = e.aggregateTaskResults(results)
-	
-	return result, nil
 }
 
-// executeIndividualTask executes a single task
-func (e *TaskEngine) executeIndividualTask(ctx context.Context, task Task) (interface{}, error) {
-	// Mock implementation - in real system this would call actual providers
-	time.Sleep(10 * time.Millisecond) // Simulate processing time
+func (tm *TaskMaster) SubmitJob(req JobRequest) (*JobResult, error) {
+	tm.logger.Infof("Submitting job %s of type %s", req.ID, req.Type)
 	
-	return map[string]interface{}{
-		"success": true,
-		"data":    fmt.Sprintf("Mock result for task %s of type %s", task.ID, task.Type),
-		"cost":    e.calculateTaskCost(task),
-		"provider": task.Provider,
+	// Create job execution
+	job := &JobExecution{
+		ID:        req.ID,
+		Status:    JobStatusPending,
+		StartTime: time.Now(),
+		Metadata:  req.Metadata,
+	}
+	
+	// Store job
+	tm.jobsMutex.Lock()
+	tm.activeJobs[req.ID] = job
+	tm.jobsMutex.Unlock()
+	
+	// Execute job asynchronously
+	go tm.executeJob(job, req)
+	
+	return &JobResult{
+		ID:       req.ID,
+		Status:   JobStatusPending,
+		Progress: 0.0,
 	}, nil
 }
 
-// analyzePrompt analyzes the user prompt to determine required task types
-func (e *TaskEngine) analyzePrompt(prompt string) []string {
-	// Simple keyword-based analysis - in production this would use NLP
-	taskTypes := []string{}
+func (tm *TaskMaster) executeJob(job *JobExecution, req JobRequest) {
+	// Wait for worker
+	<-tm.workerPool
+	defer func() {
+		tm.workerPool <- struct{}{}
+	}()
 	
-	// Check for different task indicators
-	if containsAny(prompt, []string{"generate", "create", "image", "picture", "draw"}) {
-		taskTypes = append(taskTypes, "image_generation")
-	}
+	// Update status
+	job.mutex.Lock()
+	job.Status = JobStatusRunning
+	job.mutex.Unlock()
 	
-	if containsAny(prompt, []string{"analyze", "explain", "summarize", "describe"}) {
-		taskTypes = append(taskTypes, "text_analysis")
-	}
+	tm.logger.Infof("Executing job %s", job.ID)
 	
-	if containsAny(prompt, []string{"chat", "conversation", "respond", "answer"}) {
-		taskTypes = append(taskTypes, "chat_completion")
-	}
+	// Execute the actual job
+	var err error
 	
-	// Default to chat completion if no specific task detected
-	if len(taskTypes) == 0 {
-		taskTypes = append(taskTypes, "chat_completion")
-	}
+	// Simulate work for now - replace with actual job execution logic
+	time.Sleep(2 * time.Second)
 	
-	return taskTypes
-}
-
-// selectOptimalProvider selects the best provider for a task based on cost optimization
-func (e *TaskEngine) selectOptimalProvider(taskType string, options TaskOptions) (string, error) {
-	// Cost optimization strategy
-	switch options.CostOptimization {
-	case "aggressive":
-		// Prefer free/unofficial providers
-		return e.selectByTierPreference([]string{"unofficial", "community", "official"})
-	case "balanced":
-		// Balance cost and quality
-		return e.selectByTierPreference([]string{"community", "unofficial", "official"})
-	case "quality":
-		// Prefer premium providers
-		return e.selectByTierPreference([]string{"official", "community", "unofficial"})
-	default:
-		return e.selectByTierPreference([]string{"community", "official", "unofficial"})
+	// Update final status
+	job.mutex.Lock()
+	defer job.mutex.Unlock()
+	
+	endTime := time.Now()
+	job.EndTime = &endTime
+	
+	if err != nil {
+		job.Status = JobStatusFailed
+		job.Error = err
+		tm.logger.Errorf("Job %s failed: %v", job.ID, err)
+	} else {
+		job.Status = JobStatusCompleted
+		job.Progress = 100.0
+		tm.logger.Infof("Job %s completed", job.ID)
 	}
 }
 
-// selectByTierPreference selects a provider based on tier preference
-func (e *TaskEngine) selectByTierPreference(tierPreference []string) (string, error) {
-	// Mock provider selection - in real system this would check available providers
-	providersByTier := map[string][]string{
-		"unofficial": {"pollinations", "local_script"},
-		"community":  {"huggingface", "replicate"},
-		"official":   {"openai", "anthropic", "google"},
+func (tm *TaskMaster) GetJobStatus(jobID string) (*JobResult, error) {
+	tm.jobsMutex.RLock()
+	job, exists := tm.activeJobs[jobID]
+	tm.jobsMutex.RUnlock()
+	
+	if !exists {
+		return nil, fmt.Errorf("job %s not found", jobID)
 	}
 	
-	for _, tier := range tierPreference {
-		if providers, exists := providersByTier[tier]; exists && len(providers) > 0 {
-			return providers[0], nil // Return first available provider in tier
+	job.mutex.RLock()
+	defer job.mutex.RUnlock()
+	
+	result := &JobResult{
+		ID:       job.ID,
+		Status:   job.Status,
+		Result:   job.Result,
+		Progress: job.Progress,
+	}
+	
+	if job.Error != nil {
+		result.Error = job.Error.Error()
+	}
+	
+	if job.EndTime != nil {
+		result.Duration = job.EndTime.Sub(job.StartTime).String()
+	}
+	
+	return result, nil
+}
+
+func (tm *TaskMaster) ListJobs() ([]*JobResult, error) {
+	tm.jobsMutex.RLock()
+	defer tm.jobsMutex.RUnlock()
+	
+	results := make([]*JobResult, 0, len(tm.activeJobs))
+	
+	for _, job := range tm.activeJobs {
+		job.mutex.RLock()
+		result := &JobResult{
+			ID:       job.ID,
+			Status:   job.Status,
+			Result:   job.Result,
+			Progress: job.Progress,
 		}
+		
+		if job.Error != nil {
+			result.Error = job.Error.Error()
+		}
+		
+		if job.EndTime != nil {
+			result.Duration = job.EndTime.Sub(job.StartTime).String()
+		}
+		
+		results = append(results, result)
+		job.mutex.RUnlock()
 	}
 	
-	return "", fmt.Errorf("no providers available")
+	return results, nil
 }
 
-// Helper functions
-func containsAny(text string, keywords []string) bool {
-	text = strings.ToLower(text)
-	for _, keyword := range keywords {
-		if strings.Contains(text, strings.ToLower(keyword)) {
-			return true
+func (tm *TaskMaster) CancelJob(jobID string) error {
+	tm.jobsMutex.Lock()
+	job, exists := tm.activeJobs[jobID]
+	if exists {
+		job.mutex.Lock()
+		if job.Status == JobStatusPending || job.Status == JobStatusRunning {
+			job.Status = JobStatusCancelled
+			endTime := time.Now()
+			job.EndTime = &endTime
 		}
+		job.mutex.Unlock()
 	}
-	return false
+	tm.jobsMutex.Unlock()
+	
+	if !exists {
+		return fmt.Errorf("job %s not found", jobID)
+	}
+	
+	tm.logger.Infof("Job %s cancelled", jobID)
+	return nil
 }
 
-func (e *TaskEngine) createTaskRequest(taskType, prompt string, options TaskOptions) interface{} {
+func (tm *TaskMaster) getActiveJobCount() int {
+	tm.jobsMutex.RLock()
+	defer tm.jobsMutex.RUnlock()
+	
+	count := 0
+	for _, job := range tm.activeJobs {
+		job.mutex.RLock()
+		if job.Status == JobStatusPending || job.Status == JobStatusRunning {
+			count++
+		}
+		job.mutex.RUnlock()
+	}
+	
+	return count
+}
+
+func (tm *TaskMaster) CleanupCompletedJobs() {
+	tm.jobsMutex.Lock()
+	defer tm.jobsMutex.Unlock()
+	
+	for id, job := range tm.activeJobs {
+		job.mutex.RLock()
+		isCompleted := job.Status == JobStatusCompleted || 
+		              job.Status == JobStatusFailed || 
+		              job.Status == JobStatusCancelled
+		
+		// Clean up jobs older than 1 hour
+		if isCompleted && job.EndTime != nil && 
+		   time.Since(*job.EndTime) > time.Hour {
+			delete(tm.activeJobs, id)
+			tm.logger.Debugf("Cleaned up job %s", id)
+		}
+		job.mutex.RUnlock()
+	}
+}
+
+// Helper function to determine task complexity based on input
+func (tm *TaskMaster) analyzeTaskComplexity(input string) string {
+	if strings.Contains(input, "complex") || strings.Contains(input, "advanced") {
+		return "high"
+	}
+	if strings.Contains(input, "simple") || strings.Contains(input, "basic") {
+		return "low"
+	}
+	return "medium"
+}
+
+// GetMetrics returns current TaskMaster metrics
+func (tm *TaskMaster) GetMetrics() map[string]interface{} {
+	tm.jobsMutex.RLock()
+	defer tm.jobsMutex.RUnlock()
+	
+	pending := 0
+	running := 0
+	completed := 0
+	failed := 0
+	
+	for _, job := range tm.activeJobs {
+		job.mutex.RLock()
+		switch job.Status {
+		case JobStatusPending:
+			pending++
+		case JobStatusRunning:
+			running++
+		case JobStatusCompleted:
+			completed++
+		case JobStatusFailed:
+			failed++
+		}
+		job.mutex.RUnlock()
+	}
+	
 	return map[string]interface{}{
-		"prompt":    prompt,
-		"task_type": taskType,
-		"options":   options,
-	}
-}
-
-func (e *TaskEngine) calculatePriority(taskType string, options TaskOptions) int {
-	// Simple priority calculation
-	priorities := map[string]int{
-		"chat_completion":  1,
-		"text_analysis":    2,
-		"image_generation": 3,
-	}
-	
-	if priority, exists := priorities[taskType]; exists {
-		return priority
-	}
-	return 5
-}
-
-func (e *TaskEngine) calculateTaskCost(task Task) float64 {
-	// Mock cost calculation based on provider tier
-	costs := map[string]float64{
-		"pollinations": 0.0,
-		"local_script": 0.0,
-		"huggingface":  0.001,
-		"replicate":    0.002,
-		"openai":       0.01,
-		"anthropic":    0.008,
-		"google":       0.006,
-	}
-	
-	if cost, exists := costs[task.Provider]; exists {
-		return cost
-	}
-	return 0.005 // Default cost
-}
-
-func (e *TaskEngine) aggregateTaskResults(results map[string]interface{}) interface{} {
-	// Simple aggregation - combine all task outputs
-	if len(results) == 1 {
-		for _, result := range results {
-			if data, ok := result.(map[string]interface{})["data"]; ok {
-				return data
-			}
-		}
-	}
-	
-	// Multiple tasks - combine outputs
-	combined := make([]interface{}, 0)
-	for _, result := range results {
-		if data, ok := result.(map[string]interface{})["data"]; ok {
-			combined = append(combined, data)
-		}
-	}
-	
-	return map[string]interface{}{
-		"combined_results": combined,
-		"task_count":      len(results),
+		"total_jobs":     len(tm.activeJobs),
+		"pending_jobs":   pending,
+		"running_jobs":   running,
+		"completed_jobs": completed,
+		"failed_jobs":    failed,
+		"max_workers":    tm.maxWorkers,
+		"available_workers": len(tm.workerPool),
 	}
 }
