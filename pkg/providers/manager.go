@@ -2,14 +2,20 @@ package providers
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/config"
 )
+
+// ProviderConfig represents a provider configuration
+type ProviderConfig struct {
+	Name         string            `json:"name"`
+	URL          string            `json:"url"`
+	Models       []string          `json:"models"`
+	Capabilities []string          `json:"capabilities"`
+	Priority     int               `json:"priority"`
+	Metadata     map[string]string `json:"metadata"`
+}
 
 // Provider represents a model provider
 type Provider struct {
@@ -33,16 +39,16 @@ type Manager struct {
 func NewManager() *Manager {
 	return &Manager{
 		providers: make(map[string]*Provider),
-		monitor:   NewHealthMonitor(),
+		monitor:   NewHealthMonitor(nil, 30*time.Second),
 	}
 }
 
-// LoadProviders loads providers from configuration
-func (m *Manager) LoadProviders(cfg *config.Config) error {
+// LoadProvidersFromConfigs loads providers from configuration structs
+func (m *Manager) LoadProvidersFromConfigs(configs []ProviderConfig) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	for _, providerCfg := range cfg.Providers {
+	for _, providerCfg := range configs {
 		provider := &Provider{
 			Name:         providerCfg.Name,
 			URL:          providerCfg.URL,
@@ -114,10 +120,25 @@ func (m *Manager) checkProviderHealth() {
 
 	for _, provider := range providers {
 		go func(p *Provider) {
-			status := m.monitor.CheckHealth(p.Name, p.URL)
-			m.UpdateProviderStatus(p.Name, string(status))
+			// Simple health check - just check if we can reach the provider
+			if m.isProviderHealthy(p.URL) {
+				m.UpdateProviderStatus(p.Name, "healthy")
+			} else {
+				m.UpdateProviderStatus(p.Name, "unhealthy")
+			}
 		}(provider)
 	}
+}
+
+// isProviderHealthy performs a simple health check
+func (m *Manager) isProviderHealthy(url string) bool {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode < 500
 }
 
 // GetHealthyProviders returns only healthy providers
