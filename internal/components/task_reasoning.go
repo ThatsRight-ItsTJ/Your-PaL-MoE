@@ -2,296 +2,296 @@ package components
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/types"
-	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/pkg/config"
-
-	"github.com/sirupsen/logrus"
+	"github.com/ThatsRight-ItsTJ/Your-PaL-MoE/internal/enhanced"
 )
 
-// TaskReasoningEngine analyzes task complexity and requirements
-type TaskReasoningEngine struct {
-	config *config.Config
-	logger *logrus.Logger
-
-	// Analysis patterns
-	complexityPatterns map[string]*regexp.Regexp
-	domainPatterns     map[string]*regexp.Regexp
-	intentPatterns     map[string]*regexp.Regexp
+// TaskReasoner analyzes task complexity and requirements
+type TaskReasoner struct {
+	config *Config
 }
 
-// NewTaskReasoningEngine creates a new task reasoning engine
-func NewTaskReasoningEngine(cfg *config.Config, logger *logrus.Logger) (*TaskReasoningEngine, error) {
-	engine := &TaskReasoningEngine{
+// Config represents configuration for the task reasoner
+type Config struct {
+	ComplexityWeights map[string]float64 `json:"complexity_weights"`
+	TokenMultipliers  map[enhanced.ComplexityLevel]float64 `json:"token_multipliers"`
+}
+
+// NewTaskReasoner creates a new task reasoner with default configuration
+func NewTaskReasoner(cfg *Config) *TaskReasoner {
+	if cfg == nil {
+		cfg = &Config{
+			ComplexityWeights: map[string]float64{
+				"reasoning":    0.3,
+				"mathematical": 0.25,
+				"creative":     0.2,
+				"factual":      0.25,
+			},
+			TokenMultipliers: map[enhanced.ComplexityLevel]float64{
+				enhanced.Low:      1.0,
+				enhanced.Medium:   1.2,
+				enhanced.High:     1.5,
+				enhanced.VeryHigh: 2.0,
+			},
+		}
+	}
+
+	return &TaskReasoner{
 		config: cfg,
-		logger: logger,
-	}
-
-	engine.initializePatterns()
-	return engine, nil
-}
-
-// initializePatterns initializes regex patterns for analysis
-func (t *TaskReasoningEngine) initializePatterns() {
-	// Complexity indicators
-	t.complexityPatterns = map[string]*regexp.Regexp{
-		"high_complexity":   regexp.MustCompile(`(?i)\b(complex|sophisticated|advanced|intricate|comprehensive|detailed analysis|multi-step|research)\b`),
-		"medium_complexity": regexp.MustCompile(`(?i)\b(analyze|compare|evaluate|design|create|develop|explain)\b`),
-		"low_complexity":    regexp.MustCompile(`(?i)\b(simple|basic|quick|summarize|list|define|what is)\b`),
-	}
-
-	// Domain patterns
-	t.domainPatterns = map[string]*regexp.Regexp{
-		"code":     regexp.MustCompile(`(?i)\b(code|programming|function|algorithm|debug|implement|software)\b`),
-		"math":     regexp.MustCompile(`(?i)\b(calculate|solve|equation|formula|mathematics|statistics)\b`),
-		"analysis": regexp.MustCompile(`(?i)\b(analyze|research|study|investigate|examine|report)\b`),
-		"creative": regexp.MustCompile(`(?i)\b(write|create|design|story|creative|artistic|brainstorm)\b`),
-		"business": regexp.MustCompile(`(?i)\b(business|strategy|market|finance|proposal|plan)\b`),
-	}
-
-	// Intent patterns
-	t.intentPatterns = map[string]*regexp.Regexp{
-		"generation":         regexp.MustCompile(`(?i)\b(generate|create|write|produce|make|build)\b`),
-		"analysis":           regexp.MustCompile(`(?i)\b(analyze|examine|study|investigate|review)\b`),
-		"transformation":     regexp.MustCompile(`(?i)\b(transform|convert|translate|modify|change)\b`),
-		"question_answering": regexp.MustCompile(`(?i)\b(what|how|why|when|where|explain|describe)\b`),
-		"problem_solving":    regexp.MustCompile(`(?i)\b(solve|fix|debug|resolve|troubleshoot)\b`),
 	}
 }
 
-// AnalyzeComplexity analyzes the complexity of a task request
-func (t *TaskReasoningEngine) AnalyzeComplexity(ctx context.Context, input types.RequestInput) (types.TaskComplexity, error) {
-	t.logger.Infof("Analyzing complexity for request: %s", input.ID)
+// AnalyzeComplexity analyzes the complexity of a task
+func (tr *TaskReasoner) AnalyzeComplexity(ctx context.Context, content string, taskType string) (*enhanced.TaskComplexity, error) {
+	if strings.TrimSpace(content) == "" {
+		return nil, fmt.Errorf("content cannot be empty")
+	}
 
-	content := strings.ToLower(input.Content)
-
-	// Analyze different dimensions of complexity
-	reasoning := t.analyzeReasoningComplexity(content)
-	knowledge := t.analyzeKnowledgeComplexity(content)
-	computation := t.analyzeComputationComplexity(content)
-	coordination := t.analyzeCoordinationComplexity(content)
+	// Analyze different aspects of complexity
+	reasoning := tr.detectReasoningComplexity(content)
+	mathematical := tr.detectMathematicalComplexity(content)
+	creative := tr.detectCreativeComplexity(content)
+	factual := tr.detectFactualComplexity(content)
 
 	// Calculate overall complexity
-	overall := t.calculateOverallComplexity(reasoning, knowledge, computation, coordination)
+	overall := tr.determineOverallComplexity(reasoning, mathematical, creative, factual)
 
-	// Calculate numerical score
-	score := t.calculateComplexityScore(reasoning, knowledge, computation, coordination)
+	// Estimate tokens
+	tokenEstimate := tr.estimateTokensFromText(content, overall)
 
-	complexity := types.TaskComplexity{
-		Reasoning:    reasoning,
-		Knowledge:    knowledge,
-		Computation:  computation,
-		Coordination: coordination,
-		Overall:      overall,
-		Score:        score,
-	}
+	// Determine required capabilities
+	capabilities := tr.determineRequiredCapabilities(reasoning, mathematical, creative, factual)
 
-	t.logger.Infof("Complexity analysis for %s: overall=%d, score=%.2f", input.ID, overall, score)
-	return complexity, nil
+	return &enhanced.TaskComplexity{
+		Overall:              overall,
+		Reasoning:            reasoning,
+		Mathematical:         mathematical,
+		Creative:             creative,
+		Factual:              factual,
+		TokenEstimate:        tokenEstimate,
+		RequiredCapabilities: capabilities,
+		Metadata:             make(map[string]interface{}),
+	}, nil
 }
 
-// analyzeReasoningComplexity analyzes the reasoning complexity required
-func (t *TaskReasoningEngine) analyzeReasoningComplexity(content string) types.ComplexityLevel {
-	// Check for high complexity indicators
-	if t.complexityPatterns["high_complexity"].MatchString(content) {
-		return types.VeryHigh
+// detectReasoningComplexity analyzes reasoning complexity
+func (tr *TaskReasoner) detectReasoningComplexity(content string) enhanced.ComplexityLevel {
+	content = strings.ToLower(content)
+	
+	reasoningPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`\b(because|therefore|however|although|since)\b`),
+		regexp.MustCompile(`\b(analyze|evaluate|compare|contrast|argue)\b`),
+		regexp.MustCompile(`\b(logic|reasoning|conclusion|premise|inference)\b`),
 	}
-
-	// Check for medium complexity indicators
-	if t.complexityPatterns["medium_complexity"].MatchString(content) {
-		return types.High
+	
+	score := 0
+	for _, pattern := range reasoningPatterns {
+		matches := pattern.FindAllString(content, -1)
+		score += len(matches)
 	}
-
-	// Check for low complexity indicators
-	if t.complexityPatterns["low_complexity"].MatchString(content) {
-		return types.Low
+	
+	switch {
+	case score >= 5:
+		return enhanced.VeryHigh
+	case score >= 3:
+		return enhanced.High
+	case score >= 1:
+		return enhanced.Medium
+	default:
+		return enhanced.Low
 	}
-
-	// Default to medium if no clear indicators
-	return types.Medium
 }
 
-// analyzeKnowledgeComplexity analyzes the domain knowledge required
-func (t *TaskReasoningEngine) analyzeKnowledgeComplexity(content string) types.ComplexityLevel {
-	domainMatches := 0
-	specializedDomains := 0
-
-	for domain, pattern := range t.domainPatterns {
+// detectMathematicalComplexity analyzes mathematical complexity
+func (tr *TaskReasoner) detectMathematicalComplexity(content string) enhanced.ComplexityLevel {
+	content = strings.ToLower(content)
+	
+	mathPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`\d+\s*[\+\-\*\/\^]\s*\d+`),
+		regexp.MustCompile(`\b(equation|formula|calculate|solve|derivative|integral)\b`),
+		regexp.MustCompile(`\b(algebra|geometry|calculus|statistics|probability)\b`),
+	}
+	
+	score := 0
+	for _, pattern := range mathPatterns {
 		if pattern.MatchString(content) {
-			domainMatches++
-			if domain == "code" || domain == "math" {
-				specializedDomains++
-			}
+			score++
 		}
 	}
-
-	// Multiple specialized domains = very high
-	if specializedDomains >= 2 {
-		return types.VeryHigh
-	}
-
-	// Single specialized domain = high
-	if specializedDomains >= 1 {
-		return types.High
-	}
-
-	// Multiple general domains = medium
-	if domainMatches >= 2 {
-		return types.Medium
-	}
-
-	// Single or no domain = low
-	return types.Low
-}
-
-// analyzeComputationComplexity analyzes the computational complexity
-func (t *TaskReasoningEngine) analyzeComputationComplexity(content string) types.ComplexityLevel {
-	// Look for computational indicators
-	computationWords := []string{
-		"calculate", "compute", "process", "algorithm", "optimize",
-		"iterate", "recursive", "complex analysis", "big data",
-	}
-
-	matches := 0
-	for _, word := range computationWords {
-		if strings.Contains(content, word) {
-			matches++
+	
+	// Advanced math keywords
+	advancedMath := []string{"calculus", "differential", "integral", "matrix", "vector", "theorem"}
+	for _, keyword := range advancedMath {
+		if strings.Contains(content, keyword) {
+			score += 2
 		}
 	}
-
-	if matches >= 3 {
-		return types.VeryHigh
-	} else if matches >= 2 {
-		return types.High
-	} else if matches >= 1 {
-		return types.Medium
+	
+	switch {
+	case score >= 4:
+		return enhanced.VeryHigh
+	case score >= 2:
+		return enhanced.High
+	case score >= 1:
+		return enhanced.Medium
+	default:
+		return enhanced.Low
 	}
-
-	return types.Low
 }
 
-// analyzeCoordinationComplexity analyzes the coordination complexity
-func (t *TaskReasoningEngine) analyzeCoordinationComplexity(content string) types.ComplexityLevel {
-	// Look for coordination indicators
-	coordinationWords := []string{
-		"multiple", "various", "several", "combine", "integrate",
-		"coordinate", "orchestrate", "parallel", "simultaneous",
+// detectCreativeComplexity analyzes creative complexity
+func (tr *TaskReasoner) detectCreativeComplexity(content string) enhanced.ComplexityLevel {
+	content = strings.ToLower(content)
+	
+	creativePatterns := []*regexp.Regexp{
+		regexp.MustCompile(`\b(write|create|generate|compose|design)\b`),
+		regexp.MustCompile(`\b(story|poem|article|essay|creative)\b`),
+		regexp.MustCompile(`\b(imagine|brainstorm|invent|original)\b`),
 	}
-
-	matches := 0
-	for _, word := range coordinationWords {
-		if strings.Contains(content, word) {
-			matches++
+	
+	score := 0
+	for _, pattern := range creativePatterns {
+		if pattern.MatchString(content) {
+			score++
 		}
 	}
-
-	if matches >= 3 {
-		return types.VeryHigh
-	} else if matches >= 2 {
-		return types.High
-	} else if matches >= 1 {
-		return types.Medium
+	
+	// Check for creative requirements
+	creativeKeywords := []string{"original", "unique", "innovative", "artistic", "imaginative"}
+	for _, keyword := range creativeKeywords {
+		if strings.Contains(content, keyword) {
+			score++
+		}
 	}
-
-	return types.Low
+	
+	switch {
+	case score >= 3:
+		return enhanced.High
+	case score >= 2:
+		return enhanced.Medium
+	case score >= 1:
+		return enhanced.Medium
+	default:
+		return enhanced.Low
+	}
 }
 
-// calculateOverallComplexity calculates the overall complexity level
-func (t *TaskReasoningEngine) calculateOverallComplexity(reasoning, knowledge, computation, coordination types.ComplexityLevel) types.ComplexityLevel {
-	total := int(reasoning) + int(knowledge) + int(computation) + int(coordination)
-	average := float64(total) / 4.0
-
-	if average >= 3.0 {
-		return types.VeryHigh
-	} else if average >= 2.0 {
-		return types.High
-	} else if average >= 1.0 {
-		return types.Medium
+// detectFactualComplexity analyzes factual complexity
+func (tr *TaskReasoner) detectFactualComplexity(content string) enhanced.ComplexityLevel {
+	content = strings.ToLower(content)
+	
+	factualPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`\b(fact|data|information|research|study)\b`),
+		regexp.MustCompile(`\b(when|where|who|what|how)\b`),
+		regexp.MustCompile(`\b(define|explain|describe|list)\b`),
 	}
-
-	return types.Low
+	
+	score := 0
+	for _, pattern := range factualPatterns {
+		matches := pattern.FindAllString(content, -1)
+		score += len(matches)
+	}
+	
+	switch {
+	case score >= 5:
+		return enhanced.VeryHigh
+	case score >= 3:
+		return enhanced.High
+	case score >= 1:
+		return enhanced.Medium
+	default:
+		return enhanced.Low
+	}
 }
 
-// calculateComplexityScore calculates a numerical complexity score (0.0 to 1.0)
-func (t *TaskReasoningEngine) calculateComplexityScore(reasoning, knowledge, computation, coordination types.ComplexityLevel) float64 {
-	weights := map[string]float64{
-		"reasoning":    0.3,
-		"knowledge":    0.25,
-		"computation":  0.25,
-		"coordination": 0.2,
+// determineOverallComplexity calculates overall complexity from components
+func (tr *TaskReasoner) determineOverallComplexity(reasoning, mathematical, creative, factual enhanced.ComplexityLevel) enhanced.ComplexityLevel {
+	// Calculate weighted average
+	total := int(reasoning)*2 + int(mathematical)*2 + int(creative) + int(factual)
+	average := total / 6
+	
+	// Ensure we don't exceed bounds
+	if average > int(enhanced.VeryHigh) {
+		return enhanced.VeryHigh
 	}
-
-	score := weights["reasoning"]*float64(reasoning)/3.0 +
-		weights["knowledge"]*float64(knowledge)/3.0 +
-		weights["computation"]*float64(computation)/3.0 +
-		weights["coordination"]*float64(coordination)/3.0
-
-	return score
+	if average < int(enhanced.Low) {
+		return enhanced.Low
+	}
+	
+	return enhanced.ComplexityLevel(average)
 }
 
-// ExtractRequirements extracts requirements from the task input
-func (t *TaskReasoningEngine) ExtractRequirements(ctx context.Context, input types.RequestInput) (map[string]interface{}, error) {
+// estimateTokensFromText provides a simple token estimation
+func (tr *TaskReasoner) estimateTokensFromText(text string, complexity enhanced.ComplexityLevel) int64 {
+	words := strings.Fields(text)
+	baseTokens := float64(len(words)) * 1.33 // Rough approximation: 1 token per 0.75 words
+	
+	multiplier, exists := tr.config.TokenMultipliers[complexity]
+	if !exists {
+		multiplier = 1.0
+	}
+	
+	return int64(baseTokens * multiplier)
+}
+
+// determineRequiredCapabilities determines what capabilities are needed
+func (tr *TaskReasoner) determineRequiredCapabilities(reasoning, mathematical, creative, factual enhanced.ComplexityLevel) []string {
+	var capabilities []string
+	
+	if reasoning >= enhanced.Medium {
+		capabilities = append(capabilities, "reasoning")
+	}
+	if mathematical >= enhanced.Medium {
+		capabilities = append(capabilities, "mathematical")
+	}
+	if creative >= enhanced.Medium {
+		capabilities = append(capabilities, "creative")
+	}
+	if factual >= enhanced.Medium {
+		capabilities = append(capabilities, "factual")
+	}
+	
+	return capabilities
+}
+
+// AnalyzeTaskRequirements analyzes specific task requirements
+func (tr *TaskReasoner) AnalyzeTaskRequirements(ctx context.Context, input enhanced.RequestInput) (map[string]interface{}, error) {
 	requirements := make(map[string]interface{})
-
-	content := strings.ToLower(input.Content)
-
-	// Extract domain
-	for domain, pattern := range t.domainPatterns {
-		if pattern.MatchString(content) {
-			requirements["domain"] = domain
-			break
-		}
+	
+	// Analyze content complexity
+	complexity, err := tr.AnalyzeComplexity(ctx, input.Content, string(input.TaskType))
+	if err != nil {
+		return nil, fmt.Errorf("failed to analyze complexity: %w", err)
 	}
-
-	// Extract intent
-	for intent, pattern := range t.intentPatterns {
-		if pattern.MatchString(content) {
-			requirements["intent"] = intent
-			break
-		}
+	
+	requirements["complexity"] = complexity
+	requirements["estimated_tokens"] = complexity.TokenEstimate
+	requirements["required_capabilities"] = complexity.RequiredCapabilities
+	
+	// Add task-specific requirements
+	if input.MaxTokens > 0 {
+		requirements["max_tokens"] = input.MaxTokens
 	}
-
-	// Extract quality requirements
-	if strings.Contains(content, "high quality") || strings.Contains(content, "detailed") {
-		requirements["quality_level"] = "high"
-	} else if strings.Contains(content, "quick") || strings.Contains(content, "fast") {
-		requirements["quality_level"] = "medium"
-	} else {
-		requirements["quality_level"] = "standard"
+	if input.Temperature > 0 {
+		requirements["temperature"] = input.Temperature
 	}
-
-	// Extract output format
-	if strings.Contains(content, "json") {
-		requirements["output_format"] = "json"
-	} else if strings.Contains(content, "markdown") {
-		requirements["output_format"] = "markdown"
-	} else if strings.Contains(content, "code") {
-		requirements["output_format"] = "code"
-	} else {
-		requirements["output_format"] = "text"
-	}
-
-	// Extract constraints from context
-	if input.Constraints != nil {
-		for key, value := range input.Constraints {
-			requirements[key] = value
-		}
-	}
-
+	
 	return requirements, nil
 }
 
-// ClassifyIntent classifies the primary intent of the task
-func (t *TaskReasoningEngine) ClassifyIntent(content string) string {
-	content = strings.ToLower(content)
-
-	for intent, pattern := range t.intentPatterns {
-		if pattern.MatchString(content) {
-			return intent
-		}
+// ValidateTaskInput validates task input
+func (tr *TaskReasoner) ValidateTaskInput(input enhanced.RequestInput) error {
+	if strings.TrimSpace(input.Content) == "" {
+		return fmt.Errorf("task content cannot be empty")
 	}
-
-	return "general"
+	
+	if len(input.Content) > 50000 {
+		return fmt.Errorf("task content too long (max 50000 characters)")
+	}
+	
+	return nil
 }
